@@ -1,0 +1,31 @@
+# Build artifacts
+dist/
+build/
+*.zip
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+.分发/
+
+分发/
+# Cache
+youdao_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.claude
+# macOS
+.DS_Store
+
+# Database WAL files (generated at runtime)
+*.db-shm
+*.db-wal
