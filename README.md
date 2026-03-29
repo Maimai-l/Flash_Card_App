@@ -35,7 +35,7 @@ python main.py
 
 ```bash
 pyinstaller letmepack.spec -y
-cp -R dist/FlashCardApp.app 分发/
+cp -R dist/FlashCardApp.app
 ```
 
 The built app is self-contained — no Python installation required on the target machine.
