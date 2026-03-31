@@ -1961,6 +1961,16 @@ async function checkForUpdates() {
     const notes = res.release_notes
       ? `<div style="margin-top:8px;font-size:12px;color:var(--text-sub);white-space:pre-wrap;line-height:1.5">${escHtml(res.release_notes)}</div>`
       : '';
+    const hasAsset = !!res.asset_url;
+    const installBtn = hasAsset
+      ? `<button class="btn-primary" id="install-update-btn" style="font-size:13px;flex-shrink:0"
+                 onclick="startAutoUpdate('${escHtml(res.asset_url)}')">
+           Install &amp; Restart
+         </button>`
+      : `<button class="btn-primary" style="font-size:13px;flex-shrink:0"
+                 onclick="api.open_url('${res.download_url}')">
+           Download →
+         </button>`;
     result.innerHTML = `
       <div style="margin:6px 16px;padding:12px 14px;border-radius:8px;background:rgba(0,122,255,.08);
                   font-size:13px;border:1px solid rgba(0,122,255,.2)">
@@ -1969,14 +1979,52 @@ async function checkForUpdates() {
             <span style="color:var(--accent);font-weight:600">New version available: v${escHtml(res.latest)}</span>
             <span style="color:var(--text-sub);margin-left:8px">(current: v${escHtml(res.current)})</span>
           </div>
-          <button class="btn-primary" style="font-size:13px;flex-shrink:0"
-                  onclick="api.open_url('${res.download_url}')">
-            Download →
-          </button>
+          ${installBtn}
         </div>
         ${notes}
+        <div id="update-progress-wrap" style="display:none;margin-top:12px">
+          <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
+            <div id="update-progress-bar" style="height:100%;width:0%;background:var(--accent);transition:width .3s"></div>
+          </div>
+          <div id="update-progress-label" style="margin-top:6px;font-size:12px;color:var(--text-sub)"></div>
+        </div>
       </div>`;
   }
+}
+
+let _updatePollTimer = null;
+async function startAutoUpdate(assetUrl) {
+  const btn = document.getElementById('install-update-btn');
+  if (btn) btn.disabled = true;
+
+  const wrap  = document.getElementById('update-progress-wrap');
+  const bar   = document.getElementById('update-progress-bar');
+  const label = document.getElementById('update-progress-label');
+  if (wrap) wrap.style.display = 'block';
+
+  await api.download_and_install_update(assetUrl);
+
+  // Poll progress every 400ms
+  _updatePollTimer = setInterval(async () => {
+    const p = await api.get_update_progress();
+    if (!p) return;
+
+    if (bar)   bar.style.width = (p.pct || 0) + '%';
+
+    const msgs = {
+      downloading: `Downloading… ${p.pct || 0}%`,
+      extracting:  'Verifying…',
+      launching:   'Launching updater…',
+      done:        'Restarting…',
+      error:       `Error: ${p.error || 'unknown'}`,
+    };
+    if (label) label.textContent = msgs[p.state] || '';
+
+    if (p.state === 'done' || p.state === 'error') {
+      clearInterval(_updatePollTimer);
+      if (p.state === 'error' && btn) btn.disabled = false;
+    }
+  }, 400);
 }
 
 async function exportLog() {

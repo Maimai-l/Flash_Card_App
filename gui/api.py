@@ -356,7 +356,8 @@ class Api:
     def check_for_updates(self):
         """
         Fetch the latest GitHub release and compare with local APP_VERSION.
-        Returns {up_to_date, current, latest, download_url, release_notes} or {error}.
+        Returns {up_to_date, current, latest, download_url, asset_url, release_notes} or {error}.
+        asset_url is the direct zip download link (if found in release assets).
         """
         import urllib.request
         import json as _json
@@ -374,9 +375,17 @@ class Api:
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = _json.loads(resp.read().decode())
 
-            latest_tag  = data.get("tag_name", "").lstrip("v")
+            latest_tag    = data.get("tag_name", "").lstrip("v")
             release_notes = data.get("body", "").strip()
             download_url  = data.get("html_url", RELEASES_PAGE)
+
+            # Find direct zip asset (e.g. FlashCardApp-mac.zip)
+            asset_url = None
+            for asset in data.get("assets", []):
+                name = asset.get("name", "").lower()
+                if name.endswith(".zip") and "mac" in name:
+                    asset_url = asset.get("browser_download_url")
+                    break
 
             def _ver_tuple(v):
                 try:
@@ -390,10 +399,142 @@ class Api:
                 "current":        APP_VERSION,
                 "latest":         latest_tag,
                 "download_url":   download_url,
+                "asset_url":      asset_url,
                 "release_notes":  release_notes[:400] if release_notes else "",
             }
         except Exception as e:
             return {"error": str(e)}
+
+    # Shared progress state for the active download (only one at a time)
+    _update_progress = {"state": "idle", "pct": 0, "error": None}
+
+    def get_update_progress(self):
+        """JS polls this to track download progress."""
+        return dict(self._update_progress)
+
+    def download_and_install_update(self, asset_url: str):
+        """
+        Download the zip from asset_url in a background thread, then:
+          1. Write updater.sh to a temp dir
+          2. Launch updater.sh as an independent process
+          3. Quit the app
+
+        JS should poll get_update_progress() to track state:
+          state: 'downloading' | 'extracting' | 'launching' | 'done' | 'error'
+          pct:   0-100 (download progress)
+          error: str or null
+        """
+        import sys
+        import tempfile
+        import threading
+        import urllib.request
+        import zipfile
+
+        if not asset_url:
+            return {"error": "No download URL available for this release."}
+
+        Api._update_progress = {"state": "downloading", "pct": 0, "error": None}
+
+        def _run():
+            try:
+                # ── 1. Download ──────────────────────────────────────────
+                cache_dir = Path(tempfile.gettempdir()) / "FlashCardApp_update"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                zip_path  = cache_dir / "update.zip"
+                extract_dir = cache_dir / "extracted"
+
+                req = urllib.request.Request(
+                    asset_url,
+                    headers={"User-Agent": "FlashCardApp-updater/1.0"},
+                )
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    total = int(resp.headers.get("Content-Length", 0))
+                    downloaded = 0
+                    with open(zip_path, "wb") as f:
+                        while True:
+                            chunk = resp.read(65536)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total:
+                                Api._update_progress["pct"] = int(downloaded / total * 90)
+
+                Api._update_progress = {"state": "extracting", "pct": 90, "error": None}
+
+                # ── 2. Validate zip ──────────────────────────────────────
+                if not zipfile.is_zipfile(zip_path):
+                    raise ValueError("Downloaded file is not a valid zip archive.")
+
+                # ── 3. Find app install path ─────────────────────────────
+                if getattr(sys, "frozen", False):
+                    # Running as .app bundle: executable is .app/Contents/MacOS/FlashCardApp
+                    app_path = Path(sys.executable).parent.parent.parent
+                else:
+                    # Dev mode: fall back to /Applications for testing
+                    app_path = Path("/Applications/FlashCardApp.app")
+
+                # ── 4. Write updater.sh ──────────────────────────────────
+                updater_path = cache_dir / "updater.sh"
+                updater_script = f"""#!/bin/bash
+set -e
+APP_PATH="{app_path}"
+ZIP_PATH="{zip_path}"
+EXTRACT_DIR="{extract_dir}"
+
+sleep 2
+
+# Extract
+rm -rf "$EXTRACT_DIR"
+mkdir -p "$EXTRACT_DIR"
+unzip -o "$ZIP_PATH" -d "$EXTRACT_DIR"
+
+# Find the .app
+EXTRACTED_APP=$(find "$EXTRACT_DIR" -name "*.app" -maxdepth 3 | head -1)
+if [ -z "$EXTRACTED_APP" ]; then
+    echo "ERROR: No .app found in zip" >&2
+    exit 1
+fi
+
+# Replace
+APP_PARENT=$(dirname "$APP_PATH")
+rm -rf "$APP_PATH"
+cp -R "$EXTRACTED_APP" "$APP_PARENT/"
+
+# Clear macOS quarantine
+xattr -cr "$APP_PATH" 2>/dev/null || true
+
+# Relaunch
+open "$APP_PATH"
+
+# Cleanup
+rm -rf "$EXTRACT_DIR" "$ZIP_PATH"
+"""
+                updater_path.write_text(updater_script)
+                updater_path.chmod(0o755)
+
+                Api._update_progress = {"state": "launching", "pct": 100, "error": None}
+
+                # ── 5. Launch updater and quit ───────────────────────────
+                import subprocess
+                subprocess.Popen(
+                    ["bash", str(updater_path)],
+                    start_new_session=True,   # detach from current process group
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+                Api._update_progress = {"state": "done", "pct": 100, "error": None}
+
+                import time; time.sleep(0.5)
+                # Quit the app
+                webview.windows[0].destroy()
+
+            except Exception as e:
+                Api._update_progress = {"state": "error", "pct": 0, "error": str(e)}
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True}
 
     def open_url(self, url):
         """Open a URL in the system default browser."""
