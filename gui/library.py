@@ -71,8 +71,11 @@ class LibraryService:
                 json.dump(new_info, f, indent=4)
 
     def get_app_info(self):
+        from version import APP_VERSION
         with open(data_path("app_info.json"), "r", encoding="UTF-8") as f:
-            return json.load(f)
+            info = json.load(f)
+        info["app_version"] = APP_VERSION
+        return info
 
     def update_app_info(self, app_info):
         with open(data_path("app_info.json"), "w", encoding="UTF-8") as f:
@@ -345,7 +348,7 @@ class LibraryService:
             rows = _run(f"""
                 SELECT w.vocab, w.definition_zh, w.example_en, w.example_zh,
                        w.phone_us, w.phone_uk, w.stability, w.difficulty, w.due_date, w.fsrs_state
-                FROM Words w
+                FROM Words_Effective w
                 JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
                 JOIN Word_Book wb ON wbw.book_id = wb.book_id
                 WHERE wb.book_name = ? AND w.fsrs_state > 0
@@ -356,7 +359,7 @@ class LibraryService:
             rows = _run(f"""
                 SELECT vocab, definition_zh, example_en, example_zh,
                        phone_us, phone_uk, stability, difficulty, due_date, fsrs_state
-                FROM Words WHERE fsrs_state > 0
+                FROM Words_Effective WHERE fsrs_state > 0
                   AND date(due_date) <= date('now'){excl_clause}
                 ORDER BY due_date ASC
             """, exclude)
@@ -398,7 +401,7 @@ class LibraryService:
             review_rows = _rows("""
                 SELECT w.vocab, w.definition_zh, w.example_en, w.example_zh,
                        w.phone_us, w.phone_uk, w.stability, w.difficulty, w.due_date, w.fsrs_state
-                FROM Words w
+                FROM Words_Effective w
                 JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
                 JOIN Word_Book wb ON wbw.book_id = wb.book_id
                 WHERE wb.book_name = ? AND w.fsrs_state > 0
@@ -409,7 +412,7 @@ class LibraryService:
             new_rows = _rows("""
                 SELECT w.vocab, w.definition_zh, w.example_en, w.example_zh,
                        w.phone_us, w.phone_uk, w.stability, w.difficulty, w.due_date, w.fsrs_state
-                FROM Words w
+                FROM Words_Effective w
                 JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
                 JOIN Word_Book wb ON wbw.book_id = wb.book_id
                 WHERE wb.book_name = ? AND w.due_date IS NULL
@@ -419,7 +422,7 @@ class LibraryService:
             review_rows = _rows("""
                 SELECT vocab, definition_zh, example_en, example_zh,
                        phone_us, phone_uk, stability, difficulty, due_date, fsrs_state
-                FROM Words WHERE fsrs_state > 0
+                FROM Words_Effective WHERE fsrs_state > 0
                   AND date(due_date) <= date('now')
                 ORDER BY due_date ASC
             """)
@@ -427,7 +430,7 @@ class LibraryService:
             new_rows = _rows("""
                 SELECT vocab, definition_zh, example_en, example_zh,
                        phone_us, phone_uk, stability, difficulty, due_date, fsrs_state
-                FROM Words WHERE due_date IS NULL
+                FROM Words_Effective WHERE due_date IS NULL
                 ORDER BY RANDOM() LIMIT ?
             """, (new_limit,))
 
@@ -461,7 +464,7 @@ class LibraryService:
 
         if book_filter:
             cursor.execute("""
-                SELECT COUNT(*) FROM Words w
+                SELECT COUNT(*) FROM Words_Effective w
                 JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
                 JOIN Word_Book wb ON wbw.book_id = wb.book_id
                 WHERE wb.book_name = ? AND w.due_date IS NULL
@@ -472,7 +475,7 @@ class LibraryService:
 
         if book_filter:
             cursor.execute("""
-                SELECT COUNT(*) FROM Words w
+                SELECT COUNT(*) FROM Words_Effective w
                 JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
                 JOIN Word_Book wb ON wbw.book_id = wb.book_id
                 WHERE wb.book_name = ? AND w.fsrs_state > 0
@@ -513,7 +516,7 @@ class LibraryService:
             cursor.execute("""
                 SELECT w.vocab, w.definition_zh, w.example_en, w.example_zh,
                        w.phone_us, w.phone_uk, w.stability, w.difficulty, w.due_date, w.fsrs_state
-                FROM Words w
+                FROM Words_Effective w
                 JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
                 JOIN Word_Book wb ON wbw.book_id = wb.book_id
                 WHERE wb.book_name = ? AND w.fsrs_state > 0
@@ -523,7 +526,7 @@ class LibraryService:
             cursor.execute("""
                 SELECT vocab, definition_zh, example_en, example_zh,
                        phone_us, phone_uk, stability, difficulty, due_date, fsrs_state
-                FROM Words WHERE fsrs_state > 0 ORDER BY RANDOM() LIMIT ?
+                FROM Words_Effective WHERE fsrs_state > 0 ORDER BY RANDOM() LIMIT ?
             """, (limit,))
         rows = cursor.fetchall()
         conn.close()
@@ -547,7 +550,7 @@ class LibraryService:
             cursor.execute("""
                 SELECT w.vocab, w.definition_zh, w.example_en, w.example_zh,
                        w.phone_us, w.phone_uk, w.stability, w.difficulty, w.due_date, w.fsrs_state
-                FROM Words w
+                FROM Words_Effective w
                 JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
                 JOIN Word_Book wb ON wbw.book_id = wb.book_id
                 WHERE wb.book_name = ?
@@ -557,7 +560,7 @@ class LibraryService:
             cursor.execute("""
                 SELECT vocab, definition_zh, example_en, example_zh,
                        phone_us, phone_uk, stability, difficulty, due_date, fsrs_state
-                FROM Words ORDER BY RANDOM() LIMIT ?
+                FROM Words_Effective ORDER BY RANDOM() LIMIT ?
             """, (limit,))
         rows = cursor.fetchall()
         conn.close()
@@ -678,6 +681,9 @@ class LibraryService:
                     fsrs_step    = 0,
                     updated_time = datetime('now')
             """)
+
+            # 1b. Clear user overrides — restores original system definitions
+            cursor.execute("DELETE FROM Word_Overrides")
 
             # 2. Find user-imported books (anything not in the preset set)
             ph = ','.join('?' * len(self.PRESET_BOOK_NAMES))

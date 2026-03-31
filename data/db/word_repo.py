@@ -339,6 +339,124 @@ class WordRepository:
         except Exception as e:
             return {"error": str(e), "success": False}
 
+    def get_book_words(self, book_name: str, offset: int = 0, limit: int = 100,
+                       search: str = '', missing_example: bool = False) -> dict:
+        """Return words in a book, paginated, optionally filtered by search string."""
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            filters = []
+            params_base = [book_name]
+            if search:
+                filters.append("(w.vocab LIKE ? OR w.definition_zh LIKE ?)")
+                like = f"%{search}%"
+                params_base += [like, like]
+            if missing_example:
+                filters.append("(w.example_en IS NULL OR w.example_en = '')")
+            where_extra = ("AND " + " AND ".join(filters)) if filters else ""
+            cursor.execute(f"""
+                SELECT COUNT(*) FROM Words_Effective w
+                JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
+                JOIN Word_Book wb ON wbw.book_id = wb.book_id
+                WHERE wb.book_name = ? {where_extra}
+            """, params_base)
+            total = cursor.fetchone()[0]
+            cursor.execute(f"""
+                SELECT w.word_id, w.vocab, w.definition_zh, w.example_en, w.example_zh,
+                       w.phone_us, w.fsrs_state, w.due_date
+                FROM Words_Effective w
+                JOIN Word_Book_Words wbw ON w.word_id = wbw.word_id
+                JOIN Word_Book wb ON wbw.book_id = wb.book_id
+                WHERE wb.book_name = ? {where_extra}
+                ORDER BY w.vocab
+                LIMIT ? OFFSET ?
+            """, params_base + [limit, offset])
+            words = [
+                {"id": r[0], "vocab": r[1], "definition": r[2] or "", "example": r[3] or "",
+                 "chinese": r[4] or "", "phone_us": r[5] or "",
+                 "fsrs_state": r[6] or 0, "due_date": r[7]}
+                for r in cursor.fetchall()
+            ]
+            conn.close()
+            return {"words": words, "total": total, "offset": offset, "limit": limit}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def update_word(self, word_id: int, definition: str, example: str, chinese: str) -> dict:
+        """
+        Store user edits in Word_Overrides (non-destructive — system Words table is never modified).
+        COALESCE in Words_Effective view ensures these overrides are returned in all read queries.
+        Soft reset clears Word_Overrides to restore original system definitions.
+        """
+        try:
+            conn = self._connect()
+            conn.execute("""
+                INSERT INTO Word_Overrides (word_id, definition_zh, example_en, example_zh, updated_time)
+                VALUES (?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(word_id) DO UPDATE SET
+                    definition_zh = excluded.definition_zh,
+                    example_en    = excluded.example_en,
+                    example_zh    = excluded.example_zh,
+                    updated_time  = excluded.updated_time
+            """, (word_id, definition or None, example or None, chinese or None))
+            conn.commit()
+            conn.close()
+            return {"ok": True}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def apply_word_overrides(self, overrides: dict) -> dict:
+        """
+        Bulk-write overrides for multiple words by vocab.
+        overrides: {vocab: {definition, example, chinese}}
+        Only writes non-empty values; existing overrides for unchanged fields are kept.
+        """
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            updated = 0
+            for vocab, fields in overrides.items():
+                cursor.execute("SELECT word_id FROM Words WHERE vocab = ? COLLATE NOCASE LIMIT 1", (vocab,))
+                row = cursor.fetchone()
+                if not row:
+                    continue
+                word_id = row[0]
+                definition = fields.get("definition") or None
+                example    = fields.get("example")    or None
+                chinese    = fields.get("chinese")    or None
+                # Only write if at least one field is non-empty
+                if definition is None and example is None and chinese is None:
+                    continue
+                cursor.execute("""
+                    INSERT INTO Word_Overrides (word_id, definition_zh, example_en, example_zh, updated_time)
+                    VALUES (?, ?, ?, ?, datetime('now'))
+                    ON CONFLICT(word_id) DO UPDATE SET
+                        definition_zh = COALESCE(excluded.definition_zh, definition_zh),
+                        example_en    = COALESCE(excluded.example_en,    example_en),
+                        example_zh    = COALESCE(excluded.example_zh,    example_zh),
+                        updated_time  = excluded.updated_time
+                """, (word_id, definition, example, chinese))
+                updated += 1
+            conn.commit()
+            conn.close()
+            return {"ok": True, "updated": updated}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def remove_word_from_book(self, word_id: int, book_name: str) -> dict:
+        """Remove a word from a specific book (unlinks junction table entry)."""
+        try:
+            conn = self._connect()
+            conn.execute("""
+                DELETE FROM Word_Book_Words WHERE word_id=?
+                AND book_id=(SELECT book_id FROM Word_Book WHERE book_name=?)
+            """, (word_id, book_name))
+            conn.commit()
+            conn.close()
+            return {"ok": True}
+        except Exception as e:
+            return {"error": str(e)}
+
     def get_database_stats(self) -> dict:
         try:
             conn = self._connect()

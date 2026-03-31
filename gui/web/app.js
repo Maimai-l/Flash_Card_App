@@ -92,6 +92,42 @@ function stripCite(s) {
   return (s || '').replace(/^\[\d+\]\s*/, '');
 }
 
+// ── Sound effects ─────────────────────────────────────────────────────────
+// Central stub for all UI sound events. Replace the body of each case with
+// an Audio() play call (e.g. new Audio('sfx/flip.mp3').play()) when assets
+// are ready. All interaction sounds route through here so nothing is missed.
+const SFX = {
+  _sounds: {},  // cache: { name: HTMLAudioElement }
+  _load(name) {
+    if (!this._sounds[name]) {
+      // Uncomment and set correct path once audio files are bundled:
+      // this._sounds[name] = new Audio(`sfx/${name}.mp3`);
+    }
+    return this._sounds[name];
+  },
+  play(name) {
+    const audio = this._load(name);
+    if (!audio) return;  // no-op until files are added
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  },
+};
+
+function sfx(event) {
+  switch (event) {
+    case 'flip':        SFX.play('flip');        break;  // flashcard flip
+    case 'nav':         SFX.play('nav');         break;  // prev/next navigation
+    case 'correct':     SFX.play('correct');     break;  // correct answer / Easy/Good
+    case 'wrong':       SFX.play('wrong');       break;  // wrong answer / Again
+    case 'hard':        SFX.play('hard');        break;  // Hard rating
+    case 'tap':         SFX.play('tap');         break;  // generic button tap
+    case 'success':     SFX.play('success');     break;  // session complete / import ok
+    case 'match':       SFX.play('match');       break;  // card match pair found
+    case 'mismatch':    SFX.play('mismatch');    break;  // card match wrong pair
+    case 'game_over':   SFX.play('game_over');   break;  // game finished
+  }
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────
 let _toastTimer;
 function showToast(msg, duration = 2200) {
@@ -152,7 +188,7 @@ function navigate(page, params = {}) {
 
 function goBack() {
   if (!S.history.length) return;
-  if (S.page === 'session' && PS) saveSession();  // persist progress before leaving
+  if (S.page === 'session' && PS) { saveSession(); _detachFcKeyboard(); }
   // Clean up any running game timers/poll
   if (GS) {
     if (GS._pollTimer)   clearInterval(GS._pollTimer);
@@ -461,8 +497,10 @@ async function renderSession() {
   }
 
   if (PS.phase === 'flashcard') {
+    _attachFcKeyboard();
     renderSessionFlashcard();
   } else {
+    _detachFcKeyboard();
     nextPracticeWord();
   }
 }
@@ -503,18 +541,24 @@ function renderSessionFlashcard() {
           ${isLast ? 'Start Practice →' : 'Next →'}
         </button>
       </div>
+      <div style="font-size:12px;color:var(--border);margin-top:10px">
+        ← → Arrow keys to navigate · Space to flip
+      </div>
     </div>`;
 }
 
 function flipCard() {
+  sfx('flip');
   PS.flipped = !PS.flipped;
   const inner = document.getElementById('fc-inner');
   if (inner) inner.classList.toggle('flipped', PS.flipped);
 }
 
 function fcNav(dir) {
+  sfx('nav');
   PS.flipped = false;
   if (dir === 1 && PS.fcIdx >= PS.words.length - 1) {
+    _detachFcKeyboard();
     PS.phase = 'practice';
     PS.queue = shuffle([...PS.words]);
     saveSession();
@@ -524,6 +568,29 @@ function fcNav(dir) {
   PS.fcIdx = Math.max(0, Math.min(PS.words.length - 1, PS.fcIdx + dir));
   saveSession();
   renderSessionFlashcard();
+}
+
+// ── Keyboard handler for flashcard phase ───────────────────────────────────
+// Attached once per renderSession() call, cleaned up when leaving the session page.
+let _fcKeyHandler = null;
+
+function _attachFcKeyboard() {
+  _detachFcKeyboard();
+  _fcKeyHandler = (e) => {
+    if (!PS || PS.phase !== 'flashcard') return;
+    // Don't hijack keys when an input/textarea has focus
+    if (document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); fcNav(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); fcNav(1); }
+    if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault(); flipCard();
+    }
+  };
+  window.addEventListener('keydown', _fcKeyHandler);
+}
+
+function _detachFcKeyboard() {
+  if (_fcKeyHandler) { window.removeEventListener('keydown', _fcKeyHandler); _fcKeyHandler = null; }
 }
 
 // ─── Dynamic due refresh ────────────────────────────────────────────────────
@@ -580,8 +647,8 @@ function renderFIG() {
   function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   let sentence = null;
   if (w.ex && w.word.length >= 3) {
-    const pattern = new RegExp('\\b' + escapeRe(w.word) + '\\b', 'gi');
-    const blanked = w.ex.replace(pattern, '_'.repeat(w.word.length));
+    const pattern = new RegExp('\\b' + escapeRe(w.word) + '\\w*\\b', 'gi');
+    const blanked = w.ex.replace(pattern, m => '_'.repeat(m.length));
     if (blanked !== w.ex) sentence = blanked;   // replace changed something → word was found
   }
 
@@ -620,7 +687,9 @@ async function submitFIG() {
 
   const elapsed = (Date.now() - PS.startTime) / 1000;
   const w = PS.current;
-  const isCorrect = inp.value.trim().toLowerCase() === w.word.toLowerCase();
+  const _ans = inp.value.trim().toLowerCase();
+  const _word = w.word.toLowerCase();
+  const isCorrect = _ans === _word || _ans.startsWith(_word);
 
   inp.disabled = true;
   inp.classList.add(isCorrect ? 'correct' : 'wrong');
@@ -629,6 +698,7 @@ async function submitFIG() {
   if (isCorrect) {
     const rating = elapsed <= 5 ? 4 : 3;
     const label  = elapsed <= 5 ? 'Easy' : 'Good';
+    sfx('correct');
     if (fb) fb.innerHTML = `<span class="feedback-msg correct">${label}! ✓</span>`;
     PS.stats.answers++;
     PS.stats.correct++;
@@ -639,6 +709,7 @@ async function submitFIG() {
     saveSession();
     setTimeout(() => nextPracticeWord(), 800);
   } else {
+    sfx('wrong');
     if (fb) fb.innerHTML = `<span class="feedback-msg wrong">Answer: ${escHtml(w.word)}</span>`;
     // Wrong on FIG → show MCQ (no record_answer yet — wait for MCQ outcome)
     setTimeout(() => { PS.locked = false; PS.mode = 'mcq'; PS.startTime = Date.now(); renderMCQ(); }, 1200);
@@ -737,6 +808,7 @@ async function answerMCQ(el) {
 
   PS.stats.answers++;
   if (isCorrect) {
+    sfx('hard');
     // MCQ correct after FIG wrong → Hard
     PS.stats.correct++;
     PS.stats.hard++;
@@ -746,6 +818,7 @@ async function answerMCQ(el) {
     saveSession();
     setTimeout(() => nextPracticeWord(), 800);
   } else {
+    sfx('wrong');
     // MCQ wrong → Again, requeue
     PS.stats.again++;
     PS.wordResults.set(w.word, { word: w.word, def: w.def, rating: 1, label: 'Again' });
@@ -762,6 +835,7 @@ async function answerMCQ(el) {
 let _sessionCompleteWords = [];
 
 async function showSessionComplete() {
+  sfx('success');
   setTopBar('Session Complete', true);  // back button → home
   clearSession();
   await api.complete_session();
@@ -1108,11 +1182,12 @@ async function renderImport() {
     <div class="import-page">
       <div class="section-label" style="padding-left:0;padding-top:16px">Format</div>
       <div class="tab-bar">
-        <button class="tab active" id="tab-words" onclick="switchTab('words')">Words Only</button>
-        <button class="tab"        id="tab-clip"  onclick="switchTab('clip')">Clipboard</button>
-        <button class="tab"        id="tab-txt"   onclick="switchTab('txt')">TXT</button>
-        <button class="tab"        id="tab-excel" onclick="switchTab('excel')">Excel</button>
-        <button class="tab"        id="tab-json"  onclick="switchTab('json')">JSON</button>
+        <button class="tab active" id="tab-words"  onclick="switchTab('words')">Words Only</button>
+        <button class="tab"        id="tab-clip"   onclick="switchTab('clip')">Clipboard</button>
+        <button class="tab"        id="tab-txt"    onclick="switchTab('txt')">TXT</button>
+        <button class="tab"        id="tab-excel"  onclick="switchTab('excel')">Excel</button>
+        <button class="tab"        id="tab-json"   onclick="switchTab('json')">JSON</button>
+        <button class="tab"        id="tab-manage" onclick="switchTab('manage')">Manage</button>
       </div>
 
       <!-- Target book -->
@@ -1143,10 +1218,19 @@ async function renderImport() {
 }
 
 function switchTab(tab) {
-  ['words','clip','txt','excel','json'].forEach(t => {
+  ['words','clip','txt','excel','json','manage'].forEach(t => {
     const el = document.getElementById(`tab-${t}`);
     if (el) el.classList.toggle('active', t === tab);
   });
+  if (tab === 'manage') {
+    // Manage tab renders asynchronously — show book selector + empty list first, then load
+    document.getElementById('tab-content').innerHTML = tabManageSkeleton();
+    document.getElementById('import-result').innerHTML = '';
+    _lookupResults = [];
+    // Auto-load words for currently selected book
+    loadManageWords();
+    return;
+  }
   const content = { words: tabWords, clip: tabClipboard, txt: tabTxt, excel: tabExcel, json: tabJson }[tab];
   document.getElementById('tab-content').innerHTML = content();
   document.getElementById('import-result').innerHTML = '';
@@ -1158,9 +1242,14 @@ function tabWords() {
   return `
     <div>
       <div class="form-row">
-        <label class="form-label">Paste words — one per line</label>
+        <label class="form-label">Paste words</label>
         <textarea class="form-textarea" id="words-text" style="min-height:140px"
           placeholder="apple&#10;banana&#10;ephemeral&#10;ubiquitous&#10;..."></textarea>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <label class="form-label">Word separator <span style="color:var(--text-sub);font-weight:400">(default: newline)</span></label>
+        <input class="form-input" id="words-sep" type="text" value="&#10;"
+               style="width:120px;font-family:monospace" placeholder="\\n">
       </div>
       <div style="margin-bottom:12px">
         <button class="btn-secondary" onclick="doLookup()" id="lookup-btn">Look Up in Database</button>
@@ -1180,7 +1269,17 @@ async function doLookup() {
   const btn = document.getElementById('lookup-btn');
   btn.disabled = true; btn.textContent = 'Looking up…';
 
-  const results = await api.lookup_words(text);
+  // Use custom separator (support \n, \t escape sequences)
+  const sepRaw = document.getElementById('words-sep')?.value ?? '\n';
+  const sep = sepRaw === '\\n' ? '\n' : sepRaw === '\\t' ? '\t' : sepRaw || '\n';
+  // Replace separator with newlines so the API can split on newlines
+  const normalised = sep === '\n' ? text : text.split(sep).join('\n');
+
+  const results = await api.lookup_words(normalised);
+  // Stash original DB values so importLookupResults can detect user edits
+  results.forEach(r => {
+    if (r.found) { r._origDef = r.definition; r._origEx = r.example; r._origCn = r.chinese; }
+  });
   _lookupResults = results;
 
   btn.disabled = false; btn.textContent = 'Look Up in Database';
@@ -1198,15 +1297,33 @@ async function doLookup() {
     const matchedLabel = r.found
       ? `<span style="font-weight:600">${escHtml(r.matched)}</span>${methodBadge}`
       : `<span style="color:var(--text-sub)">— not found</span>`;
-    const def = r.definition ? escHtml(r.definition.slice(0, 80)) + (r.definition.length > 80 ? '…' : '') : '';
-    const cn  = r.chinese    ? `<span style="color:var(--text-sub);margin-left:8px">${escHtml(r.chinese.slice(0,20))}</span>` : '';
+    const missingEx = r.found && !r.example;
+    const exWarning = missingEx
+      ? `<span style="color:var(--warning);font-size:11px;margin-left:6px" title="No example sentence — FIG practice may fall back to definition prompt">⚠ no example</span>`
+      : '';
+    const def = r.definition ? escHtml(r.definition.slice(0, 60)) + (r.definition.length > 60 ? '…' : '') : '';
     return `
-      <div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);gap:10px;${!r.found ? 'opacity:.45' : ''}">
-        <input type="checkbox" id="chk-${i}" ${r.found ? 'checked' : 'disabled'}
-          onchange="updateLookupCount()" style="flex-shrink:0;width:16px;height:16px;cursor:pointer">
-        <div style="width:130px;flex-shrink:0;font-size:13px;color:var(--text-sub)">${escHtml(r.input)}</div>
-        <div style="width:140px;flex-shrink:0;font-size:14px">${matchedLabel}</div>
-        <div style="flex:1;font-size:13px;color:var(--text-sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${def}${cn}</div>
+      <div class="lookup-row" id="lrow-${i}" style="${!r.found ? 'opacity:.45' : ''}">
+        <div style="display:flex;align-items:center;padding:8px 12px;gap:10px">
+          <input type="checkbox" id="chk-${i}" ${r.found ? 'checked' : 'disabled'}
+            onchange="updateLookupCount()" style="flex-shrink:0;width:16px;height:16px;cursor:pointer">
+          <div style="width:110px;flex-shrink:0;font-size:13px;color:var(--text-sub)">${escHtml(r.input)}</div>
+          <div style="width:130px;flex-shrink:0;font-size:14px">${matchedLabel}${exWarning}</div>
+          <div style="flex:1;font-size:13px;color:var(--text-sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${def}</div>
+          ${r.found ? `<button class="btn-ghost" style="font-size:12px;padding:2px 8px;flex-shrink:0" onclick="toggleLookupEdit(${i})">Edit</button>` : ''}
+        </div>
+        <div id="ledit-${i}" style="display:none;padding:0 12px 10px 38px;display:none">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <textarea class="form-textarea" id="ledit-def-${i}" style="min-height:48px;font-size:13px"
+              placeholder="Definition (Chinese) *">${escHtml(r.definition || '')}</textarea>
+            <input class="form-input" id="ledit-ex-${i}" type="text" style="font-size:13px"
+              placeholder="Example sentence (English) — required for Fill-in-Gap"
+              value="${escHtml(r.example || '')}">
+            <input class="form-input" id="ledit-cn-${i}" type="text" style="font-size:13px"
+              placeholder="Example sentence (Chinese translation)"
+              value="${escHtml(r.chinese || '')}">
+          </div>
+        </div>
       </div>`;
   }).join('');
 
@@ -1214,9 +1331,10 @@ async function doLookup() {
     <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:4px">
       <div style="display:flex;align-items:center;padding:8px 12px;background:var(--bg);font-size:11px;font-weight:600;color:var(--text-sub);text-transform:uppercase;gap:10px">
         <div style="width:16px"></div>
-        <div style="width:130px">Input</div>
-        <div style="width:140px">Matched</div>
-        <div style="flex:1">Definition preview · ${foundCount} found</div>
+        <div style="width:110px">Input</div>
+        <div style="width:130px">Matched · ${foundCount} found</div>
+        <div style="flex:1">Definition preview</div>
+        <div style="width:40px"></div>
       </div>
       ${rows}
     </div>`;
@@ -1225,6 +1343,18 @@ async function doLookup() {
   actionsEl.style.display = 'flex';
   actionsEl.style.alignItems = 'center';
   updateLookupCount();
+
+  // Auto-expand rows that are missing an example sentence so the user notices
+  results.forEach((r, i) => {
+    if (r.found && !r.example) toggleLookupEdit(i, true);
+  });
+}
+
+function toggleLookupEdit(idx, forceOpen) {
+  const el = document.getElementById(`ledit-${idx}`);
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  el.style.display = (forceOpen || !isOpen) ? 'block' : 'none';
 }
 
 function updateLookupCount() {
@@ -1239,6 +1369,17 @@ async function importLookupResults() {
   const bookname = newBook ? (document.getElementById('new-book-name')?.value?.trim() || '') : bookSel;
   if (!bookname) { showToast('Choose or create a target book'); return; }
 
+  // Merge any inline edits back into _lookupResults before sending
+  _lookupResults.forEach((r, i) => {
+    if (!r.found) return;
+    const defEl = document.getElementById(`ledit-def-${i}`);
+    const exEl  = document.getElementById(`ledit-ex-${i}`);
+    const cnEl  = document.getElementById(`ledit-cn-${i}`);
+    if (defEl) r.definition = defEl.value.trim() || r.definition;
+    if (exEl)  r.example    = exEl.value.trim();
+    if (cnEl)  r.chinese    = cnEl.value.trim();
+  });
+
   const selected = _lookupResults.filter((r, i) => {
     const chk = document.getElementById(`chk-${i}`);
     return chk && chk.checked && r.found;
@@ -1247,6 +1388,23 @@ async function importLookupResults() {
 
   const result = await api.import_word_matches(selected, bookname, newBook);
   const ok = typeof result === 'string' && result.startsWith('Successfully');
+  if (ok) {
+    sfx('success');
+    // Write any user-edited fields to Word_Overrides (non-destructive — never modifies Words table)
+    const overrides = {};
+    selected.forEach(r => {
+      const orig = _lookupResults.find(x => x.matched === r.matched);
+      if (!orig) return;
+      // Only store as override if the user actually changed something vs DB value
+      const defChanged = r.definition !== (orig._origDef ?? r.definition);
+      const exChanged  = r.example    !== (orig._origEx  ?? r.example);
+      const cnChanged  = r.chinese    !== (orig._origCn  ?? r.chinese);
+      if (defChanged || exChanged || cnChanged) {
+        overrides[r.matched] = { definition: r.definition, example: r.example, chinese: r.chinese };
+      }
+    });
+    if (Object.keys(overrides).length) await api.apply_word_overrides(overrides);
+  }
   document.getElementById('import-result').innerHTML =
     `<div class="result-msg ${ok ? 'ok' : 'err'}">${escHtml(String(result))}</div>`;
 }
@@ -1268,6 +1426,15 @@ function tabClipboard() {
           <label class="form-label">Entry separator</label>
           <input class="form-input" id="clip-entry-sep" type="text" value="&#10;">
         </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:13px;color:var(--text-sub);margin-bottom:6px">Optional fields (leave unchecked to omit from each entry)</div>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="clip-inc-ex" checked> English example (field 3)
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="clip-inc-cn" checked> Chinese example (field 4)
+        </label>
       </div>
       <div style="margin-top:4px">
         <button class="btn-primary" onclick="doImport()">Import</button>
@@ -1295,6 +1462,15 @@ function tabTxt() {
           <input class="form-input" id="txt-entry-sep" type="text" value="&#10;">
         </div>
       </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:13px;color:var(--text-sub);margin-bottom:6px">Optional fields (leave unchecked to omit from each entry)</div>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="txt-inc-ex" checked> English example (field 3)
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="txt-inc-cn" checked> Chinese example (field 4)
+        </label>
+      </div>
     </div>`;
 }
 
@@ -1317,8 +1493,18 @@ function tabExcel() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-row"><label class="form-label">Word column</label><input class="form-input" id="xl-word" type="text" value="word"></div>
         <div class="form-row"><label class="form-label">Definition column</label><input class="form-input" id="xl-def" type="text" value="definition"></div>
-        <div class="form-row"><label class="form-label">Example column</label><input class="form-input" id="xl-ex" type="text" value="example"></div>
-        <div class="form-row"><label class="form-label">Chinese column</label><input class="form-input" id="xl-cn" type="text" value="chinese"></div>
+        <div class="form-row">
+          <label class="form-label" style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="xl-inc-ex" checked> English example column
+          </label>
+          <input class="form-input" id="xl-ex" type="text" value="example">
+        </div>
+        <div class="form-row">
+          <label class="form-label" style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="xl-inc-cn" checked> Chinese example column
+          </label>
+          <input class="form-input" id="xl-cn" type="text" value="chinese">
+        </div>
       </div>
     </div>`;
 }
@@ -1336,8 +1522,18 @@ function tabJson() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-row"><label class="form-label">Vocab key</label><input class="form-input" id="json-vocab" type="text" value="word"></div>
         <div class="form-row"><label class="form-label">Definition key</label><input class="form-input" id="json-def" type="text" value="definition"></div>
-        <div class="form-row"><label class="form-label">Example key</label><input class="form-input" id="json-ex" type="text" value="example"></div>
-        <div class="form-row"><label class="form-label">Chinese key</label><input class="form-input" id="json-cn" type="text" value="chinese"></div>
+        <div class="form-row">
+          <label class="form-label" style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="json-inc-ex" checked> English example key
+          </label>
+          <input class="form-input" id="json-ex" type="text" value="example">
+        </div>
+        <div class="form-row">
+          <label class="form-label" style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="json-inc-cn" checked> Chinese example key
+          </label>
+          <input class="form-input" id="json-cn" type="text" value="chinese">
+        </div>
       </div>
     </div>`;
 }
@@ -1362,44 +1558,213 @@ async function doImport() {
   let result;
   const activeTab = document.querySelector('.tab.active')?.id?.replace('tab-','') || 'clip';
 
+  // Helper: compute positional field indices for text-based imports ("a,b\n" mode)
+  function _textFieldIndices(incEx, incCn) {
+    let next = 2; // word=0, def=1
+    const exIdx = incEx ? next++ : 9999;
+    const cnIdx = incCn ? next++ : 9999;
+    return { exIdx, cnIdx };
+  }
+
   if (activeTab === 'clip') {
     const text = document.getElementById('clip-text')?.value || '';
     const fs = document.getElementById('clip-field-sep')?.value || ' = ';
     const es = document.getElementById('clip-entry-sep')?.value || '\n';
-    result = await api.import_clipboard(text, bookname, fs, es, newBook);
+    const incEx = document.getElementById('clip-inc-ex')?.checked ?? true;
+    const incCn = document.getElementById('clip-inc-cn')?.checked ?? true;
+    const { exIdx, cnIdx } = _textFieldIndices(incEx, incCn);
+    result = await api.import_clipboard(text, bookname, fs, es, newBook, exIdx, cnIdx);
   } else if (activeTab === 'txt') {
     const path = document.getElementById('txt-path')?.value?.trim() || '';
     if (!path) { resultEl.innerHTML = '<div class="result-msg err">Please select a file.</div>'; return; }
     const fs = document.getElementById('txt-field-sep')?.value || ' = ';
     const es = document.getElementById('txt-entry-sep')?.value || '\n';
-    result = await api.import_txt(path, bookname, fs, es, newBook);
+    const incEx = document.getElementById('txt-inc-ex')?.checked ?? true;
+    const incCn = document.getElementById('txt-inc-cn')?.checked ?? true;
+    const { exIdx, cnIdx } = _textFieldIndices(incEx, incCn);
+    result = await api.import_txt(path, bookname, fs, es, newBook, exIdx, cnIdx);
   } else if (activeTab === 'excel') {
     const path = document.getElementById('xl-path')?.value?.trim() || '';
     if (!path) { resultEl.innerHTML = '<div class="result-msg err">Please select a file.</div>'; return; }
+    const incEx = document.getElementById('xl-inc-ex')?.checked ?? true;
+    const incCn = document.getElementById('xl-inc-cn')?.checked ?? true;
     result = await api.import_excel(
       path, bookname,
       document.getElementById('xl-sheet')?.value || 'Sheet1',
       document.getElementById('xl-word')?.value || 'word',
       document.getElementById('xl-def')?.value || 'definition',
-      document.getElementById('xl-ex')?.value || 'example',
-      document.getElementById('xl-cn')?.value || 'chinese',
+      incEx ? (document.getElementById('xl-ex')?.value || 'example') : '',
+      incCn ? (document.getElementById('xl-cn')?.value || 'chinese') : '',
       newBook
     );
   } else if (activeTab === 'json') {
     const path = document.getElementById('json-path')?.value?.trim() || '';
     if (!path) { resultEl.innerHTML = '<div class="result-msg err">Please select a file.</div>'; return; }
+    const incEx = document.getElementById('json-inc-ex')?.checked ?? true;
+    const incCn = document.getElementById('json-inc-cn')?.checked ?? true;
     result = await api.import_json(
       path, bookname,
       document.getElementById('json-vocab')?.value || 'word',
       document.getElementById('json-def')?.value || 'definition',
-      document.getElementById('json-ex')?.value || 'example',
-      document.getElementById('json-cn')?.value || 'chinese',
+      incEx ? (document.getElementById('json-ex')?.value || 'example') : '',
+      incCn ? (document.getElementById('json-cn')?.value || 'chinese') : '',
       newBook
     );
   }
 
   const ok = typeof result === 'string' && result.startsWith('Successfully');
   resultEl.innerHTML = `<div class="result-msg ${ok ? 'ok' : 'err'}">${escHtml(String(result))}</div>`;
+}
+
+// ── Manage tab ─────────────────────────────────────────────────────────────
+// Lets the user browse, edit (definition/example/chinese), and remove words
+// from a book. Uses the import page's book selector so no extra UI is needed.
+
+let _manageState = { offset: 0, limit: 50, total: 0, search: '' };
+
+function tabManageSkeleton() {
+  return `
+    <div id="manage-container">
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+        <input class="form-input" id="manage-search" type="text" placeholder="Search words…"
+               style="flex:1" oninput="onManageSearch()" />
+        <button class="btn-secondary" onclick="loadManageWords()">Refresh</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-sub);margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="manage-missing-only" onchange="loadManageWords(0)">
+        Show only words missing example sentence (⚠)
+      </label>
+      <div id="manage-list"><div class="spinner"></div></div>
+      <div id="manage-pager" style="display:flex;gap:8px;justify-content:center;margin-top:10px"></div>
+    </div>`;
+}
+
+async function loadManageWords(offset = 0) {
+  const bookSel = document.getElementById('import-book')?.value;
+  if (!bookSel || bookSel === '__new__') {
+    document.getElementById('manage-list').innerHTML =
+      '<div style="color:var(--text-sub);font-size:14px;padding:12px 0">Select a book above.</div>';
+    return;
+  }
+  _manageState.offset = offset;
+  _manageState.search = document.getElementById('manage-search')?.value?.trim() || '';
+  const listEl  = document.getElementById('manage-list');
+  const pagerEl = document.getElementById('manage-pager');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="spinner"></div>';
+
+  const missingOnly = document.getElementById('manage-missing-only')?.checked || false;
+  const data = await api.get_book_words(bookSel, offset, _manageState.limit, _manageState.search, missingOnly);
+  if (data.error) {
+    listEl.innerHTML = `<div style="color:var(--danger);font-size:14px">${escHtml(data.error)}</div>`;
+    return;
+  }
+  _manageState.total = data.total;
+
+  if (!data.words.length) {
+    listEl.innerHTML = '<div style="color:var(--text-sub);font-size:14px;padding:12px 0">No words found.</div>';
+    if (pagerEl) pagerEl.innerHTML = '';
+    return;
+  }
+
+  // Store word data on window so openWordEditor can pre-fill without extra API call
+  window._manageWordData = {};
+  data.words.forEach(w => { window._manageWordData[w.id] = w; });
+
+  const rows = data.words.map(w => {
+    const missingEx = !w.example;
+    const warn = missingEx
+      ? `<span title="Missing example sentence — Fill-in-Gap will fall back to definition prompt"
+               style="color:var(--warning);font-size:13px;flex-shrink:0">⚠</span>` : '';
+    return `
+    <div class="manage-word-row" id="mwr-${w.id}">
+      <div class="manage-word-vocab">${escHtml(w.vocab)}</div>
+      <div class="manage-word-def" id="mwd-${w.id}">${escHtml(w.definition)}</div>
+      ${warn}
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn-ghost manage-edit-btn" onclick="openWordEditor(${w.id},'${escHtml(w.vocab).replace(/'/g,"\\'")}')">Edit</button>
+        <button class="btn-ghost manage-del-btn"  onclick="removeWordFromBook(${w.id},'${escHtml(bookSel).replace(/'/g,"\\'")}','${escHtml(w.vocab).replace(/'/g,"\\'")}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  listEl.innerHTML = `
+    <div style="font-size:12px;color:var(--text-sub);margin-bottom:6px">
+      ${data.total} word${data.total !== 1 ? 's' : ''}${_manageState.search ? ' matching "' + escHtml(_manageState.search) + '"' : ''}
+    </div>
+    <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      ${rows}
+    </div>`;
+
+  // Pagination
+  const pages = Math.ceil(data.total / _manageState.limit);
+  const cur   = Math.floor(offset / _manageState.limit);
+  if (pagerEl) {
+    pagerEl.innerHTML = pages <= 1 ? '' : `
+      <button class="btn-ghost" ${cur === 0 ? 'disabled' : ''} onclick="loadManageWords(${(cur-1)*_manageState.limit})">‹ Prev</button>
+      <span style="font-size:13px;color:var(--text-sub);align-self:center">Page ${cur+1} / ${pages}</span>
+      <button class="btn-ghost" ${cur >= pages-1 ? 'disabled' : ''} onclick="loadManageWords(${(cur+1)*_manageState.limit})">Next ›</button>`;
+  }
+}
+
+let _manageSearchTimer;
+function onManageSearch() {
+  clearTimeout(_manageSearchTimer);
+  _manageSearchTimer = setTimeout(() => loadManageWords(0), 350);
+}
+
+// Inline word editor — replaces the row with an edit form
+function openWordEditor(wordId, vocab) {
+  const row = document.getElementById(`mwr-${wordId}`);
+  if (!row) return;
+  const w = (window._manageWordData || {})[wordId] || {};
+  const missingEx = !w.example;
+  row.innerHTML = `
+    <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+      <div style="font-weight:600;font-size:14px">${escHtml(vocab)}</div>
+      <textarea class="form-textarea" id="edit-def-${wordId}" style="min-height:56px;font-size:13px"
+                placeholder="Definition (Chinese)">${escHtml(w.definition || '')}</textarea>
+      <div>
+        <input class="form-input" id="edit-ex-${wordId}" type="text" style="font-size:13px"
+          placeholder="Example sentence (English) — required for Fill-in-Gap ✱"
+          value="${escHtml(w.example || '')}">
+        ${missingEx ? `<div style="font-size:11px;color:var(--warning);margin-top:3px">⚠ No example — Fill-in-Gap practice will show the definition as a fallback instead of a sentence.</div>` : ''}
+      </div>
+      <input class="form-input" id="edit-cn-${wordId}" type="text" style="font-size:13px"
+        placeholder="Chinese translation of example"
+        value="${escHtml(w.chinese || '')}">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+      <button class="btn-primary" style="font-size:13px" onclick="saveWordEdit(${wordId})">Save</button>
+      <button class="btn-ghost"   style="font-size:13px" onclick="loadManageWords(${_manageState.offset})">Cancel</button>
+    </div>`;
+}
+
+async function saveWordEdit(wordId) {
+  const def = document.getElementById(`edit-def-${wordId}`)?.value?.trim() || '';
+  const ex  = document.getElementById(`edit-ex-${wordId}`)?.value?.trim()  || '';
+  const cn  = document.getElementById(`edit-cn-${wordId}`)?.value?.trim()  || '';
+  const res = await api.update_word(wordId, def, ex, cn);
+  if (res.error) { showToast('Error: ' + res.error); return; }
+  sfx('tap');
+  showToast('Saved');
+  loadManageWords(_manageState.offset);
+}
+
+async function removeWordFromBook(wordId, bookName, vocab) {
+  showConfirm(
+    `Remove "${vocab}"?`,
+    `This removes "${vocab}" from the book "${bookName}". The word data itself is kept.`,
+    'Remove',
+    async () => {
+      const res = await api.remove_word_from_book(wordId, bookName);
+      if (res.error) { showToast('Error: ' + res.error); return; }
+      sfx('tap');
+      showToast(`Removed "${vocab}"`);
+      loadManageWords(_manageState.offset);
+    },
+    true
+  );
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1430,14 +1795,33 @@ async function renderSettings() {
       <!-- Data Management -->
       <div class="section-label" style="padding-left:0;padding-top:20px">Data Management</div>
       <div class="list-group">
-        <div class="list-row" style="border:none;cursor:pointer" onclick="confirmReset()">
+        <div class="list-row" style="cursor:pointer" onclick="exportData()">
+          <span class="list-row-label">Export Data Backup</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               style="color:var(--text-sub)">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </div>
+        <div class="list-row" style="cursor:pointer" onclick="importData()">
+          <span class="list-row-label">Import Data Backup</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               style="color:var(--text-sub)">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <div class="list-row" style="border:none;cursor:pointer;border-top:1px solid var(--border)" onclick="confirmReset()">
           <span class="list-row-label" style="color:var(--danger);text-align:center">Reset Progress &amp; Imported Books</span>
         </div>
         ${S.debug ? `<div class="list-row" style="border:none;cursor:pointer;border-top:1px solid var(--border)" onclick="confirmFactoryReset()">
           <span class="list-row-label" style="color:var(--danger);text-align:center;opacity:.6">Factory Reset (Dev)</span>
         </div>` : ''}
       </div>
-      <div style="font-size:12px;color:var(--text-sub);padding:6px 16px 0">Clears all FSRS progress and removes books you imported. Preset word lists (CET, TOEFL, GRE) are kept.</div>
+      <div id="data-backup-result" style="font-size:12px;padding:4px 16px 0;min-height:18px"></div>
+      <div style="font-size:12px;color:var(--text-sub);padding:4px 16px 0">Export saves all your books, progress, and edits to a file. Import restores from a backup — <b>existing data will be overwritten</b>.</div>
 
       ${S.debug ? `
       <!-- FSRS Rating Boundaries (debug only) -->
@@ -1471,6 +1855,16 @@ async function renderSettings() {
       <div id="settings-boundary-status" style="font-size:12px;padding:4px 16px 0;text-align:center"></div>
       ` : ''}
 
+      <!-- Updates -->
+      <div class="section-label" style="padding-left:0;padding-top:20px">Updates</div>
+      <div class="list-group" style="margin-bottom:4px">
+        <div class="list-row" style="cursor:pointer" onclick="checkForUpdates()">
+          <span class="list-row-label">Check for Updates</span>
+          <span id="update-badge" style="font-size:12px;color:var(--text-sub)">v${appInfo.app_version || '—'}</span>
+        </div>
+      </div>
+      <div id="update-result" style="margin:0 0 4px"></div>
+
       <!-- Diagnostics -->
       <div class="section-label" style="padding-left:0;padding-top:20px">Diagnostics</div>
       <div class="list-group" style="margin-bottom:4px">
@@ -1502,6 +1896,9 @@ async function renderSettings() {
 
       <div style="margin-top:32px;text-align:center;padding-bottom:32px">
         <button class="btn-primary" onclick="saveSettings()">Save Changes</button>
+        <div style="margin-top:14px;font-size:12px;color:var(--border)">
+          FlashCard App v${appInfo.app_version || '—'}
+        </div>
       </div>
     </div>`;
 }
@@ -1530,11 +1927,97 @@ async function saveSettings() {
   showToast('Settings saved.');
 }
 
+async function checkForUpdates() {
+  const badge  = document.getElementById('update-badge');
+  const result = document.getElementById('update-result');
+  if (!result) return;
+
+  if (badge) badge.textContent = 'Checking…';
+  result.innerHTML = '';
+
+  const res = await api.check_for_updates();
+
+  if (res.error) {
+    if (badge) badge.textContent = '';
+    result.innerHTML = `
+      <div style="margin:6px 16px;padding:10px 14px;border-radius:8px;background:rgba(255,59,48,.08);
+                  font-size:13px;color:var(--danger)">
+        Unable to check for updates. Please verify your internet connection.<br>
+        <span style="font-size:11px;color:var(--text-sub)">${escHtml(res.error)}</span>
+      </div>`;
+    return;
+  }
+
+  if (badge) badge.textContent = `v${res.current}`;
+
+  if (res.up_to_date) {
+    result.innerHTML = `
+      <div style="margin:6px 16px;padding:10px 14px;border-radius:8px;background:rgba(52,199,89,.08);
+                  font-size:13px;color:var(--success);display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">✓</span>
+        You're up to date — v${escHtml(res.current)} is the latest version.
+      </div>`;
+  } else {
+    const notes = res.release_notes
+      ? `<div style="margin-top:8px;font-size:12px;color:var(--text-sub);white-space:pre-wrap;line-height:1.5">${escHtml(res.release_notes)}</div>`
+      : '';
+    result.innerHTML = `
+      <div style="margin:6px 16px;padding:12px 14px;border-radius:8px;background:rgba(0,122,255,.08);
+                  font-size:13px;border:1px solid rgba(0,122,255,.2)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <span style="color:var(--accent);font-weight:600">New version available: v${escHtml(res.latest)}</span>
+            <span style="color:var(--text-sub);margin-left:8px">(current: v${escHtml(res.current)})</span>
+          </div>
+          <button class="btn-primary" style="font-size:13px;flex-shrink:0"
+                  onclick="api.open_url('${res.download_url}')">
+            Download →
+          </button>
+        </div>
+        ${notes}
+      </div>`;
+  }
+}
+
 async function exportLog() {
   const res = await api.export_log();
   if (!res || res.cancelled) return;
   if (res.error) { showToast('Error: ' + res.error, 3000); return; }
   showToast('Log saved to: ' + res.path, 4000);
+}
+
+async function exportData() {
+  const statusEl = document.getElementById('data-backup-result');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-sub)">Saving…</span>';
+  const res = await api.export_data();
+  if (!res || res.cancelled) { if (statusEl) statusEl.innerHTML = ''; return; }
+  if (res.error) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger)">${escHtml(res.error)}</span>`;
+    return;
+  }
+  if (statusEl) statusEl.innerHTML = `<span style="color:#34C759">Backup saved.</span>`;
+  showToast('Backup saved to: ' + res.path, 4000);
+}
+
+async function importData() {
+  showConfirm(
+    'Import Data Backup',
+    'This will OVERWRITE all your current books, progress, and word edits with the backup file. This cannot be undone. The app will need to restart after import.',
+    'Choose File & Overwrite',
+    async () => {
+      const path = await api.open_file_dialog(['Database files (*.db)', 'All files (*.*)']);
+      if (!path) return;
+      const statusEl = document.getElementById('data-backup-result');
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-sub)">Importing…</span>';
+      const res = await api.import_data(path);
+      if (res && res.error) {
+        if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger)">${escHtml(res.error)}</span>`;
+        return;
+      }
+      if (statusEl) statusEl.innerHTML = '<span style="color:#34C759">Import complete. Please restart the app.</span>';
+      showToast('Data imported. Please restart the app to apply changes.', 6000);
+    }
+  );
 }
 
 function confirmReset() {
@@ -2498,6 +2981,7 @@ function flipMatchCard(idx) {
   const cA = GS.cards[iA], cB = GS.cards[iB];
 
   if (cA.word === cB.word && cA.type !== cB.type) {
+    sfx('match');
     // Correct match — wait for flip animation, then mark matched
     GS.locked = true;
     setTimeout(() => {
@@ -2515,6 +2999,7 @@ function flipMatchCard(idx) {
       }
     }, 460);
   } else {
+    sfx('mismatch');
     // Wrong pair — shake both, then flip back
     GS.attempts[cA.word] = (GS.attempts[cA.word] || 0) + 1;
     GS.attempts[cB.word] = (GS.attempts[cB.word] || 0) + 1;

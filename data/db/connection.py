@@ -8,7 +8,7 @@ from paths import data_path, res_path, resource_path
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 8  # v8 = repair missing Word_Book_Words links for CET/TOEFL/GRE
+SCHEMA_VERSION = 9  # v9 = Word_Overrides table + Words_Effective view (non-destructive user edits)
 
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS Word_Book (
@@ -52,6 +52,26 @@ CREATE INDEX IF NOT EXISTS idx_words_vocab ON Words(vocab);
 CREATE INDEX IF NOT EXISTS idx_words_due_date ON Words(due_date);
 CREATE INDEX IF NOT EXISTS idx_wbw_book_id ON Word_Book_Words(book_id);
 CREATE INDEX IF NOT EXISTS idx_wbw_word_id ON Word_Book_Words(word_id);
+
+CREATE TABLE IF NOT EXISTS Word_Overrides (
+    word_id       INTEGER PRIMARY KEY REFERENCES Words(word_id) ON DELETE CASCADE,
+    definition_zh TEXT,
+    example_en    TEXT,
+    example_zh    TEXT,
+    updated_time  TEXT DEFAULT (datetime('now'))
+);
+
+CREATE VIEW IF NOT EXISTS Words_Effective AS
+SELECT
+    w.word_id, w.vocab,
+    COALESCE(o.definition_zh, w.definition_zh) AS definition_zh,
+    COALESCE(o.example_en,    w.example_en)    AS example_en,
+    COALESCE(o.example_zh,    w.example_zh)    AS example_zh,
+    w.phone_us, w.phone_uk,
+    w.stability, w.difficulty, w.due_date, w.last_review,
+    w.fsrs_state, w.fsrs_step, w.created_time, w.updated_time
+FROM Words w
+LEFT JOIN Word_Overrides o ON w.word_id = o.word_id;
 """
 
 DEFAULT_BOOKS = ["Pre_Generate", "User_Import"]
@@ -120,6 +140,10 @@ class DatabaseConnection:
                 return 3
             if "phone_us" not in cols:
                 return 5  # v4→v5 adds phone columns
+            # Check for Word_Overrides table (added in v9)
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Word_Overrides'")
+            if not cursor.fetchone():
+                return 8
             return SCHEMA_VERSION
         except Exception:
             return 0
@@ -183,6 +207,11 @@ class DatabaseConnection:
             if version == 7:
                 logger.info("Migrating database from v7 to v8: repairing missing book links...")
                 self._migrate_v7_to_v8()
+                version = 8
+
+            if version == 8:
+                logger.info("Migrating database from v8 to v9: adding Word_Overrides + Words_Effective view...")
+                self._migrate_v8_to_v9()
                 return True
 
             # Fresh install
@@ -535,6 +564,39 @@ class DatabaseConnection:
         conn.commit()
         conn.close()
         logger.info("Migration v4→v5 completed: renamed columns, added pronunciation fields")
+
+    def _migrate_v8_to_v9(self):
+        """Add Word_Overrides table and Words_Effective view for non-destructive user edits."""
+        conn = self.connect()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Word_Overrides (
+                word_id       INTEGER PRIMARY KEY REFERENCES Words(word_id) ON DELETE CASCADE,
+                definition_zh TEXT,
+                example_en    TEXT,
+                example_zh    TEXT,
+                updated_time  TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # Drop and recreate view in case it exists from a partial run
+        cursor.execute("DROP VIEW IF EXISTS Words_Effective")
+        cursor.execute("""
+            CREATE VIEW Words_Effective AS
+            SELECT
+                w.word_id, w.vocab,
+                COALESCE(o.definition_zh, w.definition_zh) AS definition_zh,
+                COALESCE(o.example_en,    w.example_en)    AS example_en,
+                COALESCE(o.example_zh,    w.example_zh)    AS example_zh,
+                w.phone_us, w.phone_uk,
+                w.stability, w.difficulty, w.due_date, w.last_review,
+                w.fsrs_state, w.fsrs_step, w.created_time, w.updated_time
+            FROM Words w
+            LEFT JOIN Word_Overrides o ON w.word_id = o.word_id
+        """)
+        cursor.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (?)", (9,))
+        conn.commit()
+        conn.close()
+        logger.info("Migration v8→v9 completed: Word_Overrides + Words_Effective")
 
     def _migrate_v7_to_v8(self):
         """

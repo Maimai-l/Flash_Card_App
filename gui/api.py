@@ -3,6 +3,7 @@ PyWebView API bridge — all methods callable from JS via window.pywebview.api
 """
 import os
 import shutil
+from pathlib import Path
 import webview
 import data.fsrs_system as fsrs
 from gui.library import LibraryService
@@ -126,7 +127,7 @@ class Api:
             # 1. Exact match (case-insensitive)
             cursor.execute(
                 "SELECT vocab, definition_zh, example_en, example_zh "
-                "FROM Words WHERE vocab = ? COLLATE NOCASE LIMIT 1",
+                "FROM Words_Effective WHERE vocab = ? COLLATE NOCASE LIMIT 1",
                 (word,)
             )
             row = cursor.fetchone()
@@ -141,14 +142,14 @@ class Api:
             # 2. Starts-with search then pick closest via difflib
             cursor.execute(
                 "SELECT vocab, definition_zh, example_en, example_zh "
-                "FROM Words WHERE vocab LIKE ? LIMIT 20",
+                "FROM Words_Effective WHERE vocab LIKE ? LIMIT 20",
                 (f"{word}%",)
             )
             rows = cursor.fetchall()
             if not rows:
                 cursor.execute(
                     "SELECT vocab, definition_zh, example_en, example_zh "
-                    "FROM Words WHERE vocab LIKE ? LIMIT 20",
+                    "FROM Words_Effective WHERE vocab LIKE ? LIMIT 20",
                     (f"%{word}%",)
                 )
                 rows = cursor.fetchall()
@@ -197,6 +198,41 @@ class Api:
         except Exception as e:
             return str(e)
 
+    # ── Word management ─────────────────────────────────────────────────────
+
+    def get_book_words(self, book_name, offset=0, limit=100, search='', missing_example=False):
+        """Return paginated word list for a book. Each item: {id, vocab, definition, example, chinese}."""
+        try:
+            return self.library.word_repo.get_book_words(
+                book_name, offset, limit, search, bool(missing_example))
+        except Exception as e:
+            return {"error": str(e)}
+
+    def update_word(self, word_id, definition, example, chinese):
+        """Store user edits in Word_Overrides (non-destructive). Reset restores originals."""
+        try:
+            return self.library.word_repo.update_word(int(word_id), definition, example, chinese)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def apply_word_overrides(self, overrides):
+        """
+        Bulk-write overrides by vocab name.
+        overrides: {vocab: {definition, example, chinese}}
+        Only writes non-empty values; never touches the base Words table.
+        """
+        try:
+            return self.library.word_repo.apply_word_overrides(overrides)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def remove_word_from_book(self, word_id, book_name):
+        """Unlink a word from a book without deleting it globally."""
+        try:
+            return self.library.word_repo.remove_word_from_book(int(word_id), book_name)
+        except Exception as e:
+            return {"error": str(e)}
+
     # ── Calendar ────────────────────────────────────────────────────────────
 
     def get_calendar_info(self):
@@ -207,10 +243,11 @@ class Api:
 
     # ── Import ──────────────────────────────────────────────────────────────
 
-    def import_clipboard(self, text, bookname, field_sep, entry_sep, new_book):
+    def import_clipboard(self, text, bookname, field_sep, entry_sep, new_book, ex_idx=2, cn_idx=3):
         try:
             return self.library.import_clipboard(
-                text, field_sep, entry_sep, bookname, new_book=new_book
+                text, field_sep, entry_sep, bookname, new_book=new_book,
+                example_field_index=int(ex_idx), example_chinese_field_index=int(cn_idx),
             )
         except Exception as e:
             return str(e)
@@ -231,13 +268,58 @@ class Api:
         except Exception as e:
             return str(e)
 
-    def import_txt(self, path, bookname, field_sep, entry_sep, new_book):
+    def import_txt(self, path, bookname, field_sep, entry_sep, new_book, ex_idx=2, cn_idx=3):
         try:
             return self.library.import_txt(
-                path, field_sep, entry_sep, bookname, new_book=new_book
+                path, field_sep, entry_sep, bookname, new_book=new_book,
+                example_field_index=int(ex_idx), example_chinese_field_index=int(cn_idx),
             )
         except Exception as e:
             return str(e)
+
+    def export_data(self):
+        """Copy vocabulary.db to a user-chosen location as a backup."""
+        db_src = Path(self.library.db_path)
+        if not db_src.exists():
+            return {"error": "Database file not found."}
+        try:
+            result = webview.windows[0].create_file_dialog(
+                webview.FileDialog.SAVE,
+                save_filename="flashcard_backup.db",
+                file_types=("Database files (*.db)", "All files (*.*)"),
+            )
+            dest = result[0] if isinstance(result, (list, tuple)) else result
+            if not dest:
+                return {"cancelled": True}
+            shutil.copy2(db_src, dest)
+            return {"ok": True, "path": dest}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def import_data(self, src_path: str):
+        """Replace vocabulary.db with the user-supplied backup. App must restart."""
+        import sqlite3 as _sqlite3
+        db_dest = Path(self.library.db_path)
+        src = Path(src_path)
+        if not src.exists():
+            return {"error": "File not found."}
+        # Minimal sanity check: confirm it's a SQLite3 file
+        try:
+            with open(src, "rb") as f:
+                magic = f.read(16)
+            if not magic.startswith(b"SQLite format 3"):
+                return {"error": "File does not appear to be a valid SQLite database."}
+        except Exception as e:
+            return {"error": str(e)}
+        try:
+            # Back up current db just in case
+            backup_path = db_dest.parent / "vocabulary.db.pre_import"
+            if db_dest.exists():
+                shutil.copy2(db_dest, backup_path)
+            shutil.copy2(src, db_dest)
+            return {"ok": True}
+        except Exception as e:
+            return {"error": str(e)}
 
     def export_log(self):
         """Open a save-file dialog and copy app.log to the chosen location."""
@@ -268,6 +350,65 @@ class Api:
             return result[0] if result else None
         except Exception:
             return None
+
+    # ── Update check ────────────────────────────────────────────────────────
+
+    def check_for_updates(self):
+        """
+        Fetch the latest GitHub release and compare with local APP_VERSION.
+        Returns {up_to_date, current, latest, download_url, release_notes} or {error}.
+        """
+        import urllib.request
+        import json as _json
+        from version import APP_VERSION
+
+        RELEASES_API = "https://api.github.com/repos/Maimai-l/Flash_Card_App/releases/latest"
+        RELEASES_PAGE = "https://github.com/Maimai-l/Flash_Card_App/releases/latest"
+
+        try:
+            req = urllib.request.Request(
+                RELEASES_API,
+                headers={"User-Agent": "FlashCardApp-updater/1.0",
+                         "Accept": "application/vnd.github+json"},
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = _json.loads(resp.read().decode())
+
+            latest_tag  = data.get("tag_name", "").lstrip("v")
+            release_notes = data.get("body", "").strip()
+            download_url  = data.get("html_url", RELEASES_PAGE)
+
+            def _ver_tuple(v):
+                try:
+                    return tuple(int(x) for x in v.split("."))
+                except Exception:
+                    return (0,)
+
+            up_to_date = _ver_tuple(APP_VERSION) >= _ver_tuple(latest_tag)
+            return {
+                "up_to_date":     up_to_date,
+                "current":        APP_VERSION,
+                "latest":         latest_tag,
+                "download_url":   download_url,
+                "release_notes":  release_notes[:400] if release_notes else "",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    def open_url(self, url):
+        """Open a URL in the system default browser."""
+        import subprocess
+        import sys
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", url])
+            elif sys.platform.startswith("win"):
+                subprocess.Popen(["start", url], shell=True)
+            else:
+                subprocess.Popen(["xdg-open", url])
+            return {"ok": True}
+        except Exception as e:
+            return {"error": str(e)}
 
     # ── Debug ────────────────────────────────────────────────────────────────
 
