@@ -120,9 +120,5 @@ def res_path(*parts: str) -> Path:
     return resource_path("res", *parts)
 
 
-def cache_path(*parts: str) -> Path:
-    return resource_path("youdao_cache", *parts)
-
-
 def ensure_parent_dir(target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)

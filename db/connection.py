@@ -318,8 +318,8 @@ class DatabaseConnection:
             return 0
 
     def _import_bundled_word_lists(self):
-        from data.db.book_repo import BookRepository
-        from data.db.word_repo import WordRepository
+        from db.book_repo import BookRepository
+        from db.word_repo import WordRepository
 
         book_repo = BookRepository(self.db_path)
         word_repo = WordRepository(self.db_path)

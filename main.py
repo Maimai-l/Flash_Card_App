@@ -5,7 +5,7 @@ import functools
 import http.server
 
 from gui.api import Api
-from gui.library import LibraryService
+from services.context import AppContext
 from gui.dev_bridge import dev_bridge_enabled, make_handler
 from paths import BASE_PATH, USER_DATA_ROOT
 
@@ -50,8 +50,8 @@ def _start_file_server(directory: str, port: int, api=None) -> None:
 
 
 def main():
-    library = LibraryService()
-    api = Api(library)
+    context = AppContext()
+    api = Api(context)
 
     _start_file_server(WEB_DIR, PORT, api)
 

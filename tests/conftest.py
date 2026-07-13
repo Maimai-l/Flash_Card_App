@@ -37,7 +37,7 @@ FIXTURE_WORDS = [
 
 def build_fixture_db(db_path: Path):
     """Create a small, ready-to-use v9 schema DB with known words + books."""
-    from data.db.connection import CREATE_TABLES_SQL, SCHEMA_VERSION
+    from db.connection import CREATE_TABLES_SQL, SCHEMA_VERSION
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
@@ -90,19 +90,18 @@ def _reload_paths():
 
 
 @pytest.fixture
-def library(user_data_dir):
-    """A LibraryService bound to the fixture DB."""
-    # Ensure modules that captured data_path at import get the reloaded paths.
+def context(user_data_dir):
+    """An AppContext (repos + services) bound to the fixture DB."""
     import importlib
-    import gui.library as lib_mod
-    importlib.reload(lib_mod)
-    return lib_mod.LibraryService()
+    import services.context as ctx_mod
+    importlib.reload(ctx_mod)
+    return ctx_mod.AppContext()
 
 
 @pytest.fixture
-def api(library):
-    """An Api facade bound to the fixture library."""
+def api(context):
+    """An Api facade bound to the fixture context."""
     import importlib
     import gui.api as api_mod
     importlib.reload(api_mod)
-    return api_mod.Api(library)
+    return api_mod.Api(context)
