@@ -24,14 +24,22 @@ def _detect_base_path() -> Path:
 def _user_data_root() -> Path:
     """
     Return a per-user writable config/data directory.
+
+    The FLASHCARD_USER_DATA environment variable overrides the default
+    location. It is used by tests and headless/e2e runs to point the app at
+    a throwaway directory instead of the real user profile.
     """
-    home = Path.home()
-    if sys.platform == "darwin":
-        base = home / "Library" / "Application Support" / APP_NAME
-    elif sys.platform.startswith("win"):
-        base = Path(os.environ.get("APPDATA", home)) / APP_NAME
+    override = os.environ.get("FLASHCARD_USER_DATA")
+    if override:
+        base = Path(override).expanduser()
     else:
-        base = home / f".{APP_NAME.lower()}"
+        home = Path.home()
+        if sys.platform == "darwin":
+            base = home / "Library" / "Application Support" / APP_NAME
+        elif sys.platform.startswith("win"):
+            base = Path(os.environ.get("APPDATA", home)) / APP_NAME
+        else:
+            base = home / f".{APP_NAME.lower()}"
     base.mkdir(parents=True, exist_ok=True)
     return base
 

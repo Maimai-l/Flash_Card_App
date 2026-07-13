@@ -4,17 +4,19 @@ PyWebView API bridge — all methods callable from JS via window.pywebview.api
 import os
 import shutil
 from pathlib import Path
-import webview
 import data.fsrs_system as fsrs
 from gui.library import LibraryService
 from paths import USER_DATA_ROOT
 
+# NOTE: `webview` is imported lazily inside the few methods that need the
+# native window (file dialogs, updater). Importing it at module load would
+# make the whole API bridge unimportable in headless/test environments where
+# pywebview's GUI backend is unavailable.
+
 
 class Api:
-    def __init__(self, library: LibraryService, game_service=None, ws_server=None):
-        self.library      = library
-        self.game_service = game_service
-        self.ws_server    = ws_server
+    def __init__(self, library: LibraryService):
+        self.library = library
 
     # ── App info ────────────────────────────────────────────────────────────
 
@@ -279,6 +281,7 @@ class Api:
 
     def export_data(self):
         """Copy vocabulary.db to a user-chosen location as a backup."""
+        import webview
         db_src = Path(self.library.db_path)
         if not db_src.exists():
             return {"error": "Database file not found."}
@@ -323,6 +326,7 @@ class Api:
 
     def export_log(self):
         """Open a save-file dialog and copy app.log to the chosen location."""
+        import webview
         log_src = USER_DATA_ROOT / "app.log"
         if not log_src.exists():
             return {"error": "No log file found."}
@@ -340,6 +344,7 @@ class Api:
             return {"error": str(e)}
 
     def open_file_dialog(self, file_types=None):
+        import webview
         try:
             types = tuple(file_types) if file_types else ("All files (*.*)",)
             result = webview.windows[0].create_file_dialog(
@@ -428,6 +433,7 @@ class Api:
         import tempfile
         import threading
         import urllib.request
+        import webview
         import zipfile
 
         if not asset_url:
@@ -582,92 +588,5 @@ rm -rf "$EXTRACT_DIR" "$ZIP_PATH"
         try:
             self.library.reset_data()
             return {"ok": True}
-        except Exception as e:
-            return {"error": str(e)}
-
-    # ── Games ────────────────────────────────────────────────────────────────
-
-    def get_unity_games(self):
-        """
-        Scan gui/web/unity_games/ for WebGL builds.
-        Each sub-folder containing index.html is a valid game.
-        Returns [{name, url}] served via the existing HTTP server on port 18765.
-        """
-        import os
-        web_dir   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
-        unity_dir = os.path.join(web_dir, "unity_games")
-        if not os.path.isdir(unity_dir):
-            return []
-        games = []
-        for name in sorted(os.listdir(unity_dir)):
-            if os.path.isfile(os.path.join(unity_dir, name, "index.html")):
-                games.append({
-                    "name": name,
-                    "url":  f"http://127.0.0.1:18765/unity_games/{name}/index.html",
-                })
-        return games
-
-    def get_game_list(self):
-        """Return all registered game types."""
-        try:
-            if not self.game_service:
-                return {"error": "Game service not available"}
-            return self.game_service.get_game_list()
-        except Exception as e:
-            return {"error": str(e)}
-
-    def start_game_session(self, game_id, book_name, config=None):
-        """
-        Create a game session and select words.
-        Returns {ok, session_id, words, config, word_count} or {error}.
-        """
-        try:
-            if not self.game_service:
-                return {"error": "Game service not available"}
-            return self.game_service.create_session(game_id, book_name, config or {})
-        except Exception as e:
-            return {"error": str(e)}
-
-    def submit_game_results(self, session_id, results):
-        """
-        Submit per-word results, apply FSRS updates, mark session COMPLETE.
-        results: [{word, correct, elapsed_s, skipped?}]
-        Returns {ok, fsrs_updated, score, accuracy, session_id} or {error}.
-        """
-        try:
-            if not self.game_service:
-                return {"error": "Game service not available"}
-            return self.game_service.submit_results(session_id, results)
-        except Exception as e:
-            return {"error": str(e)}
-
-    def get_session_result(self, session_id):
-        """Return stored result for a completed/abandoned session."""
-        try:
-            if not self.game_service:
-                return {"error": "Game service not available"}
-            return self.game_service.get_session_result(session_id)
-        except Exception as e:
-            return {"error": str(e)}
-
-    def get_ws_server_info(self):
-        """Return WebSocket server status {running, port, url, clients}."""
-        try:
-            if not self.ws_server:
-                return {"running": False, "port": 18766, "url": "ws://127.0.0.1:18766", "clients": 0}
-            return self.ws_server.get_status()
-        except Exception as e:
-            return {"error": str(e)}
-
-    def launch_unity_game(self, game_id, unity_exe_path, config=None):
-        """
-        Spawn the Unity executable as a subprocess.
-        config must contain session_id from start_game_session.
-        Returns {ok, pid, session_id} or {error}.
-        """
-        try:
-            if not self.game_service:
-                return {"error": "Game service not available"}
-            return self.game_service.launch_unity(game_id, unity_exe_path, config or {})
         except Exception as e:
             return {"error": str(e)}

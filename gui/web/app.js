@@ -9,10 +9,6 @@ const S = {
   bookName: null,    // currently selected book
   calMonth: null,    // {year, month} for calendar display
   debug:    false,   // debug mode toggle
-  // Game subsystem
-  gameId:         null,  // selected game_id string
-  gameSession:    null,  // {session_id, words, config, game_id, word_count}
-  gameResultData: null,  // {score, accuracy, fsrs_updated, wordResults, game_id}
 };
 
 // Practice sub-state (reset each session)
@@ -81,9 +77,21 @@ function continueSession() {
 }
 
 // ── API wrapper ───────────────────────────────────────────────────────────
+// Primary transport is pywebview's injected bridge. When pywebview is absent
+// (browser-based dev / Playwright e2e), fall back to the HTTP JSON bridge
+// served by gui/dev_bridge.py at POST /api.
 const api = new Proxy({}, {
   get(_, method) {
-    return (...args) => window.pywebview.api[method](...args);
+    return (...args) => {
+      if (window.pywebview && window.pywebview.api) {
+        return window.pywebview.api[method](...args);
+      }
+      return fetch('/api', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ method, args }),
+      }).then(r => r.json());
+    };
   }
 });
 
@@ -122,9 +130,6 @@ function sfx(event) {
     case 'hard':        SFX.play('hard');        break;  // Hard rating
     case 'tap':         SFX.play('tap');         break;  // generic button tap
     case 'success':     SFX.play('success');     break;  // session complete / import ok
-    case 'match':       SFX.play('match');       break;  // card match pair found
-    case 'mismatch':    SFX.play('mismatch');    break;  // card match wrong pair
-    case 'game_over':   SFX.play('game_over');   break;  // game finished
   }
 }
 
@@ -189,14 +194,6 @@ function navigate(page, params = {}) {
 function goBack() {
   if (!S.history.length) return;
   if (S.page === 'session' && PS) { saveSession(); _detachFcKeyboard(); }
-  // Clean up any running game timers/poll
-  if (GS) {
-    if (GS._pollTimer)   clearInterval(GS._pollTimer);
-    if (GS.timerId)      clearInterval(GS.timerId);
-    if (GS.roundTimerId) clearInterval(GS.roundTimerId);
-    if (GS._msgHandler)  window.removeEventListener('message', GS._msgHandler);
-    GS = null;
-  }
   S.page = S.history.pop();
   PS = null;
   render();
@@ -223,10 +220,6 @@ async function render() {
     case 'import':       await renderImport();      break;
     case 'settings':     await renderSettings();    break;
     case 'debug':        await renderDebug();       break;
-    case 'games':        await renderGames();       break;
-    case 'game_config':  await renderGameConfig();  break;
-    case 'game_play':    await renderGamePlay();    break;
-    case 'game_results': await renderGameResults(); break;
     default:             await renderHome();
   }
 }
@@ -299,9 +292,7 @@ async function renderHome() {
             ${S.debug ? '🐛 Debug Session' : 'Start Session'}
           </button>
         `}
-        <button class="btn-secondary w100" style="margin-top:8px" onclick="openGamesFromHome()">
-          Mini Games
-        </button>
+        <!-- Word Spire card-battle game entry point returns here in a later phase -->
         ${S.debug ? `<button class="btn-secondary w100" style="margin-top:8px" onclick="navigate('debug')">DB Inspector</button>` : ''}
       </div>
     </div>`;
@@ -831,8 +822,6 @@ async function answerMCQ(el) {
 }
 
 // ─── Session complete ───────────────────────────────────────────────────────
-// Holds words from the just-finished session so the Card Match entry can use them.
-let _sessionCompleteWords = [];
 
 async function showSessionComplete() {
   sfx('success');
@@ -843,16 +832,6 @@ async function showSessionComplete() {
   // Capture stats + words before clearing PS
   const st          = PS.stats;
   const wordResults = PS.wordResults;
-
-  // Build a game-compatible word list from the session for Card Match
-  _sessionCompleteWords = [...wordResults.values()].map(r => ({
-    word:       r.word,
-    definition: r.def || '',
-    example:    '',
-    chinese:    '',
-    phone_us:   '',
-    phone_uk:   '',
-  }));
 
   PS = null;
 
@@ -873,8 +852,6 @@ async function showSessionComplete() {
         ${r.label}
       </div>
     </div>`).join('');
-
-  const canPlayCardMatch = _sessionCompleteWords.length >= 3;
 
   // Scrollable wrapper — overrides #content's overflow:hidden for this page only
   $content().innerHTML = `
@@ -922,46 +899,9 @@ async function showSessionComplete() {
             ${wordRows}
           </div>` : ''}
 
-        <!-- Card Match entry -->
-        ${canPlayCardMatch ? `
-          <div class="section-label">Practice</div>
-          <div class="list-group" style="margin-bottom:16px;cursor:pointer"
-               onclick="playCardMatchFromSession()">
-            <div style="padding:16px;display:flex;align-items:center;gap:14px">
-              <div style="font-size:32px">🎴</div>
-              <div style="flex:1">
-                <div style="font-weight:600;font-size:15px;margin-bottom:3px">Card Match</div>
-                <div style="font-size:13px;color:var(--text-sub)">
-                  Flip cards to match today's ${_sessionCompleteWords.length} words with their definitions.
-                </div>
-              </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.5" style="flex-shrink:0;color:var(--text-sub)">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-            </div>
-          </div>` : ''}
-
         <button class="btn-primary w100" onclick="finishSession()">Back to Main Page</button>
       </div>
     </div>`;
-}
-
-async function playCardMatchFromSession() {
-  if (!_sessionCompleteWords.length) return;
-  // Build a fake game session object using the session words directly (no API call)
-  const count = Math.min(_sessionCompleteWords.length, 12);
-  const words = shuffle([..._sessionCompleteWords]).slice(0, count);
-  S.gameSession = {
-    session_id: 'session-' + Date.now(),
-    game_id:    'card_match',
-    words,
-    config:     { word_count: count, fsrs_update: false },  // FSRS was already updated in session
-    word_count: count,
-  };
-  S.gameId = 'card_match';
-  GS = null;
-  navigate('game_play');
 }
 
 async function finishSession() {
@@ -977,7 +917,7 @@ async function renderDebug() {
   setTopBar('🐛 Debug Inspector', true);
   $content().innerHTML = '<div class="spinner"></div>';
 
-  const [stats, games] = await Promise.all([api.get_db_stats(), api.get_game_list()]);
+  const stats = await api.get_db_stats();
   if (stats.error) {
     $content().innerHTML = `<div class="result-msg err">Error: ${escHtml(stats.error)}</div>`;
     return;
@@ -1065,28 +1005,6 @@ async function renderDebug() {
         </div>
       </div>
 
-      <!-- Force Load Game (debug) -->
-      <div class="section-label">Force Load Game</div>
-      <div class="list-group" style="margin-bottom:20px;padding:16px">
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-          <div style="flex:1;min-width:140px">
-            <div style="font-size:11px;color:var(--text-sub);margin-bottom:4px;text-transform:uppercase;font-weight:600">Game</div>
-            <select class="styled-select" id="dbg-game-select">
-              ${(games || []).map(g => `<option value="${escHtml(g.id)}">${escHtml(g.name)}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--text-sub);margin-bottom:4px;text-transform:uppercase;font-weight:600">Words</div>
-            <input class="form-input" id="dbg-game-count" type="number" value="6" min="3" max="20"
-                   style="margin:0;width:70px">
-          </div>
-          <button class="btn-primary" onclick="debugForceGame()" style="height:40px;padding:0 20px">Load Game</button>
-        </div>
-        <div style="font-size:11px;color:var(--text-sub);margin-top:8px">
-          Starts any game with random words and FSRS updates off — tests game UI without affecting progress.
-        </div>
-      </div>
-
       <button class="btn-ghost w100" onclick="goBack()">← Back to Home</button>
     </div>`;
 }
@@ -1140,30 +1058,6 @@ async function debugForceSession() {
   };
   showToast(`🐛 Loaded ${normalised.length} words (FSRS bypassed)`, 2000);
   navigate('session');
-}
-
-function _dbgFsrsBoundaries() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('dbg_fsrs_boundaries') || '{}');
-    return { easy_s: saved.easy_s ?? 3, hard_s: saved.hard_s ?? 10 };
-  } catch { return { easy_s: 3, hard_s: 10 }; }
-}
-
-
-async function debugForceGame() {
-  const gameId = document.getElementById('dbg-game-select')?.value;
-  const count  = parseInt(document.getElementById('dbg-game-count')?.value || '6');
-  if (!gameId) return;
-  const { easy_s, hard_s } = _dbgFsrsBoundaries();
-  // fsrs_update=true in debug so you can test the boundary effect; use a debug book to avoid polluting progress
-  const resp = await api.start_game_session(gameId, S.bookName, {
-    word_count: count, fsrs_update: false, easy_s, hard_s,
-  });
-  if (resp.error) { showToast('Error: ' + resp.error, 3500); return; }
-  S.gameSession = resp;
-  S.gameId      = gameId;
-  GS            = null;
-  navigate('game_play');
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1774,7 +1668,6 @@ async function renderSettings() {
   setTopBar('Settings', true);
   const appInfo = await api.get_app_info();
   const count = appInfo.daily_new_limit || 20;
-  const { easy_s, hard_s } = _dbgFsrsBoundaries();
 
   $content().innerHTML = `
     <div class="settings-page">
@@ -1822,38 +1715,6 @@ async function renderSettings() {
       </div>
       <div id="data-backup-result" style="font-size:12px;padding:4px 16px 0;min-height:18px"></div>
       <div style="font-size:12px;color:var(--text-sub);padding:4px 16px 0">Export saves all your books, progress, and edits to a file. Import restores from a backup — <b>existing data will be overwritten</b>.</div>
-
-      ${S.debug ? `
-      <!-- FSRS Rating Boundaries (debug only) -->
-      <div class="section-label" style="padding-left:0;padding-top:20px">
-        Game FSRS Boundaries
-        <span style="font-size:11px;color:var(--text-sub);font-weight:400;margin-left:6px">debug only</span>
-      </div>
-      <div class="list-group" style="padding:16px">
-        <div style="font-size:13px;color:var(--text-sub);margin-bottom:12px;line-height:1.5">
-          Response-time thresholds for mapping game answers to FSRS ratings.
-          Only applied to sessions started from <b>Load Game</b> in DB Inspector.
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
-          <div>
-            <div style="font-size:11px;color:var(--text-sub);margin-bottom:4px;text-transform:uppercase;font-weight:600">Easy if under (s)</div>
-            <input class="form-input" id="settings-easy-s" type="number" value="${easy_s}"
-                   min="1" max="30" step="0.5" style="margin:0">
-            <div style="font-size:11px;color:#34C759;margin-top:3px">elapsed &lt; this → Rating 4 (Easy)</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--text-sub);margin-bottom:4px;text-transform:uppercase;font-weight:600">Hard if over (s)</div>
-            <input class="form-input" id="settings-hard-s" type="number" value="${hard_s}"
-                   min="1" max="60" step="0.5" style="margin:0">
-            <div style="font-size:11px;color:#FF9500;margin-top:3px">elapsed &gt; this → Rating 2 (Hard)</div>
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--text-sub)">
-          Between thresholds → Good (3)&nbsp;&nbsp;·&nbsp;&nbsp;Wrong → Again (1)
-        </div>
-      </div>
-      <div id="settings-boundary-status" style="font-size:12px;padding:4px 16px 0;text-align:center"></div>
-      ` : ''}
 
       <!-- Updates -->
       <div class="section-label" style="padding-left:0;padding-top:20px">Updates</div>
@@ -1908,21 +1769,6 @@ async function saveSettings() {
   const appInfo = await api.get_app_info();
   appInfo.daily_new_limit = count;
   await api.update_app_info(appInfo);
-
-  // Save FSRS boundaries if the debug inputs are present
-  const easyEl = document.getElementById('settings-easy-s');
-  const hardEl = document.getElementById('settings-hard-s');
-  if (easyEl && hardEl) {
-    const easy_s = parseFloat(easyEl.value || '3');
-    const hard_s = parseFloat(hardEl.value || '10');
-    const statusEl = document.getElementById('settings-boundary-status');
-    if (easy_s >= hard_s) {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">Easy threshold must be less than Hard threshold — not saved.</span>';
-    } else {
-      localStorage.setItem('dbg_fsrs_boundaries', JSON.stringify({ easy_s, hard_s }));
-      if (statusEl) statusEl.innerHTML = `<span style="color:var(--success)">Boundaries saved: Easy &lt;${easy_s}s · Hard &gt;${hard_s}s</span>`;
-    }
-  }
 
   showToast('Settings saved.');
 }
@@ -2107,1048 +1953,25 @@ function confirmFactoryReset() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   MINI GAMES
-   ════════════════════════════════════════════════════════════════════════ */
-
-// GS shape (set per-game):
-//   session_id, game_id, words, results, idx, locked, score, lives, streak,
-//   startTime, mcqCorrect, phase, typed, scrambled, roundTimeLeft,
-//   timerId, roundTimerId, _pollTimer
-
-let GS = null;
-
-// ── Shared: submit results → game_results page ─────────────────────────────
-async function finishGame(wordResults) {
-  if (GS && GS._pollTimer)   clearInterval(GS._pollTimer);
-  if (GS && GS.timerId)      clearInterval(GS.timerId);
-  if (GS && GS.roundTimerId) clearInterval(GS.roundTimerId);
-  const session_id = GS ? GS.session_id : S.gameSession.session_id;
-  const game_id    = GS ? GS.game_id    : S.gameSession.game_id;
-
-  // Local sessions (e.g. from session-complete page) are not registered on the server.
-  const isLocal = session_id && session_id.startsWith('session-');
-  let resp;
-  if (isLocal) {
-    // Compute score client-side; skip FSRS update (session words were already rated)
-    const correct = wordResults.filter(r => r.correct && !r.skipped).length;
-    const total   = wordResults.filter(r => !r.skipped).length;
-    resp = {
-      score:        _matchScore ? _matchScore() : correct * 20,
-      accuracy:     total > 0 ? correct / total : 0,
-      fsrs_updated: 0,
-    };
-  } else {
-    resp = await api.submit_game_results(session_id, wordResults);
-  }
-
-  S.gameResultData = {
-    score:        resp.score        ?? 0,
-    accuracy:     resp.accuracy     ?? 0,
-    fsrs_updated: resp.fsrs_updated ?? 0,
-    wordResults:  wordResults,
-    game_id:      game_id,
-    error:        resp.error || null,
-  };
-  GS = null;
-  navigate('game_results');
-}
-
-// ── Games lobby ────────────────────────────────────────────────────────────
-async function renderGames() {
-  setTopBar('Mini Games', true);
-  const games = await api.get_game_list();
-  if (!games || games.error) {
-    $content().innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-sub)">Game service unavailable.</div>`;
-    return;
-  }
-  const iconMap = { flash_memory:'🃏', word_scramble:'🔤', speed_typing:'⌨️', battle_mcq:'⚔️', unity_slot:'🎮', card_match:'🎴' };
-  const ENABLED_GAMES = ['card_match'];
-  const cards = games.filter(g => ENABLED_GAMES.includes(g.id)).map(g => `
-    <div class="list-group" style="margin-bottom:12px;cursor:pointer"
-         onclick="navigate('game_config', {gameId:'${escHtml(g.id)}'})">
-      <div style="padding:16px;display:flex;align-items:flex-start;gap:14px">
-        <div style="font-size:32px;flex-shrink:0">${iconMap[g.id] || '🎯'}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:15px;margin-bottom:4px">${escHtml(g.name)}</div>
-          <div style="font-size:13px;color:var(--text-sub);line-height:1.5">${escHtml(g.description)}</div>
-          <div style="font-size:12px;color:var(--text-sub);margin-top:6px;opacity:.7">
-            ${g.min_words}–${g.max_words} words
-          </div>
-        </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2.5" style="flex-shrink:0;color:var(--text-sub);margin-top:4px">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </div>
-    </div>`).join('');
-
-  $content().innerHTML = `
-    <div style="padding:0 32px 40px">
-      <div class="section-label" style="padding-left:0">Choose a Game</div>
-      <div style="font-size:13px;color:var(--text-sub);margin-bottom:16px">
-        Using word book: <b>${escHtml(S.bookName || 'All')}</b>
-      </div>
-      ${cards}
-    </div>`;
-}
-
-// ── Game config ────────────────────────────────────────────────────────────
-async function renderGameConfig() {
-  const games = await api.get_game_list();
-  const game  = (games || []).find(g => g.id === S.gameId);
-  if (!game) { navigate('games'); return; }
-  setTopBar(game.name, true);
-
-  const schema = game.config_schema || {};
-  const fields = Object.entries(schema).map(([key, spec]) => {
-    if (key === 'fsrs_update') return `
-      <div style="display:flex;align-items:center;justify-content:space-between;
-                  padding:12px 0;border-bottom:1px solid var(--border)">
-        <div>
-          <div style="font-size:14px;font-weight:500">FSRS Update</div>
-          <div style="font-size:12px;color:var(--text-sub);margin-top:2px">Apply results to spaced repetition</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="cfg-${key}" ${spec.default ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>`;
-    if (key === 'unity_exe_path') return `
-      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
-        <div style="font-size:14px;font-weight:500;margin-bottom:8px">Unity Executable</div>
-        <div style="display:flex;gap:8px">
-          <input class="form-input" id="cfg-unity_exe_path" type="text"
-                 style="flex:1;margin:0" placeholder="Click Browse to select .exe / .app">
-          <button class="btn-secondary" onclick="browseUnityExe()">Browse</button>
-        </div>
-      </div>`;
-    if (spec.type === 'int') {
-      const labelMap = {
-        word_count:'Word Count', preview_ms:'Preview Time (ms)',
-        time_limit_s:'Time Limit (s, 0=off)', round_time_s:'Round Time (s)',
-        lives:'Lives', time_per_q_s:'Time per Question (s)',
-      };
-      const label = labelMap[key] || key;
-      return `
-        <div style="padding:12px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div style="font-size:14px;font-weight:500">${label}</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <input type="range" id="cfg-${key}-range"
-                     min="${spec.min}" max="${spec.max}" value="${spec.default}"
-                     oninput="document.getElementById('cfg-${key}-val').textContent=this.value"
-                     style="width:100px">
-              <span id="cfg-${key}-val"
-                    style="font-size:14px;font-weight:600;min-width:28px;text-align:right">
-                ${spec.default}
-              </span>
-            </div>
-          </div>
-        </div>`;
-    }
-    return '';
-  }).join('');
-
-  $content().innerHTML = `
-    <div style="padding:0 32px 40px">
-      <div class="section-label" style="padding-left:0">Settings</div>
-      <div class="list-group" style="padding:0 16px;margin-bottom:20px">
-        ${fields || '<div style="padding:12px 0;font-size:13px;color:var(--text-sub)">No settings for this game.</div>'}
-      </div>
-      <div class="section-label" style="padding-left:0">Book</div>
-      <div class="list-group" style="margin-bottom:24px">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px">
-          <span style="font-size:14px">Word Book</span>
-          <span style="font-size:14px;font-weight:600">${escHtml(S.bookName || 'All')}</span>
-        </div>
-      </div>
-      <button class="btn-primary w100" onclick="startGameSession()">
-        Start ${escHtml(game.name)}
-      </button>
-    </div>`;
-}
-
-async function browseUnityExe() {
-  const path = await api.open_file_dialog(['All files (*.*)']);
-  const el = document.getElementById('cfg-unity_exe_path');
-  if (el && path) el.value = path;
-}
-
-function _readGameConfig(schema) {
-  const cfg = {};
-  for (const [key, spec] of Object.entries(schema)) {
-    if (spec.type === 'int') {
-      const el = document.getElementById(`cfg-${key}-range`);
-      cfg[key] = el ? parseInt(el.value) : spec.default;
-    } else if (spec.type === 'bool') {
-      const el = document.getElementById(`cfg-${key}`);
-      cfg[key] = el ? el.checked : spec.default;
-    } else {
-      const el = document.getElementById(`cfg-${key}`);
-      cfg[key] = el ? el.value : spec.default;
-    }
-  }
-  return cfg;
-}
-
-function openGamesFromHome() {
-  S.gameAllLearned = true;   // flag: pull from all learned words, not just today's
-  navigate('games');
-}
-
-async function startGameSession() {
-  const games = await api.get_game_list();
-  const game  = (games || []).find(g => g.id === S.gameId);
-  if (!game) return;
-  const cfg = _readGameConfig(game.config_schema || {});
-  // If entered from home page, use all-learned pool instead of today's FSRS queue
-  if (S.gameAllLearned) cfg.all_learned = true;
-  const btn = document.querySelector('.btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
-  const resp = await api.start_game_session(S.gameId, S.bookName, cfg);
-  if (resp.error) {
-    if (btn) { btn.disabled = false; btn.textContent = `Start ${game.name}`; }
-    showToast('Error: ' + resp.error, 3500);
-    return;
-  }
-  S.gameSession = resp;
-  GS = null;
-  navigate('game_play');
-}
-
-// ── Game play dispatcher ───────────────────────────────────────────────────
-async function renderGamePlay() {
-  const sess = S.gameSession;
-  if (!sess) { navigate('games'); return; }
-  switch (sess.game_id) {
-    case 'flash_memory':  renderFlashMemoryGame();  break;
-    case 'word_scramble': renderWordScrambleGame(); break;
-    case 'speed_typing':  renderSpeedTypingGame();  break;
-    case 'battle_mcq':    renderBattleMCQGame();    break;
-    case 'unity_slot':    renderUnitySlot();        break;
-    case 'card_match':    renderCardMatchGame();    break;
-    default:
-      $content().innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger)">
-        Unknown game: ${escHtml(sess.game_id)}</div>`;
-  }
-}
-
-// ─── Flash Memory ──────────────────────────────────────────────────────────
-function renderFlashMemoryGame() {
-  const sess = S.gameSession;
-  if (!GS) {
-    GS = {
-      session_id: sess.session_id,
-      game_id:    sess.game_id,
-      words:      sess.words,
-      phase:      'preview',
-      idx:        0,
-      results:    [],
-      locked:     false,
-      mcqCorrect: null,
-      startTime:  0,
-    };
-  }
-  setTopBar('Flash Memory', true);
-  if (GS.phase === 'preview') {
-    _renderFlashPreview(sess.config.preview_ms || 3000);
-  } else {
-    _renderFlashQuestion();
-  }
-}
-
-function _renderFlashPreview(previewMs) {
-  const totalSec = Math.max(1, Math.ceil(previewMs / 1000));
-  const cards = GS.words.map(w => `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px">
-      <div style="font-weight:700;font-size:14px;color:#007AFF;margin-bottom:4px">${escHtml(w.word)}</div>
-      <div style="font-size:12px;color:var(--text-sub);line-height:1.4">
-        ${escHtml((w.definition || '').slice(0, 80))}
-      </div>
-    </div>`).join('');
-
-  $content().innerHTML = `
-    <div style="padding:0 0 24px;overflow-y:auto;flex:1">
-      <div style="text-align:center;padding:20px 0 16px">
-        <div style="font-size:14px;color:var(--text-sub);margin-bottom:4px">Memorise these words!</div>
-        <div style="font-size:36px;font-weight:700" id="flash-countdown">${totalSec}</div>
-        <div style="font-size:12px;color:var(--text-sub)">seconds remaining</div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
-        ${cards}
-      </div>
-    </div>`;
-
-  let sec = totalSec;
-  const tick = setInterval(() => {
-    sec--;
-    const el = document.getElementById('flash-countdown');
-    if (el) el.textContent = Math.max(0, sec);
-    if (sec <= 0) {
-      clearInterval(tick);
-      GS.phase = 'quiz';
-      GS.idx   = 0;
-      _renderFlashQuestion();
-    }
-  }, 1000);
-}
-
-function _renderFlashQuestion() {
-  if (GS.idx >= GS.words.length) { finishGame(GS.results); return; }
-  const w       = GS.words[GS.idx];
-  GS.locked     = false;
-  GS.startTime  = Date.now();
-  const others  = GS.words.filter((_, i) => i !== GS.idx);
-  const decoys  = shuffle([...others]).slice(0, 3).map(o => o.definition || '');
-  GS.mcqCorrect = w.definition || '';
-  const opts    = shuffle([GS.mcqCorrect, ...decoys]);
-  const progress = `${GS.idx + 1} / ${GS.words.length}`;
-  setTopBar(`Flash Memory — ${progress}`, true);
-
-  const optsHtml = opts.map(o => `
-    <button class="mcq-opt" data-val="${escHtml(o)}" onclick="answerFlash(this)"
-            style="text-align:left;font-size:13px;line-height:1.5">
-      ${escHtml((o || '').slice(0, 120))}${(o || '').length > 120 ? '…' : ''}
-    </button>`).join('');
-
-  $content().innerHTML = `
-    <div class="question-page">
-      <div style="text-align:center;padding:24px 0">
-        <div style="font-size:11px;text-transform:uppercase;font-weight:600;
-                    color:var(--text-sub);letter-spacing:.08em;margin-bottom:10px">
-          Which definition matches?
-        </div>
-        <div style="font-size:28px;font-weight:700">${escHtml(w.word)}</div>
-        ${w.chinese ? `<div style="font-size:13px;color:var(--text-sub);margin-top:6px">${escHtml(w.chinese)}</div>` : ''}
-      </div>
-      <div class="mcq-grid">${optsHtml}</div>
-    </div>`;
-}
-
-function answerFlash(el) {
-  if (GS.locked) return;
-  GS.locked = true;
-  const elapsed_s = (Date.now() - GS.startTime) / 1000;
-  const correct   = el.dataset.val === GS.mcqCorrect;
-  document.querySelectorAll('.mcq-opt').forEach(opt => {
-    opt.classList.add('locked');
-    if (opt.dataset.val === GS.mcqCorrect) opt.classList.add(correct ? 'correct' : 'reveal');
-  });
-  if (!correct) el.classList.add('wrong');
-  GS.results.push({ word: GS.words[GS.idx].word, correct, elapsed_s });
-  GS.idx++;
-  setTimeout(() => {
-    if (GS.idx < GS.words.length) _renderFlashQuestion();
-    else finishGame(GS.results);
-  }, correct ? 700 : 1200);
-}
-
-// ─── Word Scramble ─────────────────────────────────────────────────────────
-function renderWordScrambleGame() {
-  const sess = S.gameSession;
-  if (!GS) {
-    GS = {
-      session_id: sess.session_id,
-      game_id:    sess.game_id,
-      words:      shuffle([...sess.words]),
-      idx:        0,
-      results:    [],
-      locked:     false,
-      typed:      [],
-      scrambled:  [],
-      startTime:  0,
-    };
-  }
-  _renderScrambleQuestion();
-}
-
-function _scrambleLetters(word) {
-  const arr = word.split('').map((ch, i) => ({ ch, origIdx: i }));
-  return shuffle([...arr]);
-}
-
-function _renderScrambleQuestion() {
-  if (GS.idx >= GS.words.length) { finishGame(GS.results); return; }
-  const w      = GS.words[GS.idx];
-  GS.locked    = false;
-  GS.typed     = [];
-  GS.scrambled = _scrambleLetters(w.word);
-  GS.startTime = Date.now();
-  const progress = `${GS.idx + 1} / ${GS.words.length}`;
-  setTopBar(`Word Scramble — ${progress}`, true);
-  _renderScrambleUI();
-}
-
-function _renderScrambleUI() {
-  const w    = GS.words[GS.idx];
-  const sArr = GS.scrambled;
-  const letterBtns = sArr.map((item, sIdx) => {
-    const used = GS.typed.includes(sIdx);
-    return `<button class="letter-chip ${used ? 'used' : ''}"
-              data-sidx="${sIdx}" onclick="pickLetter(${sIdx})"
-              ${used ? 'disabled' : ''}>${escHtml(item.ch)}</button>`;
-  }).join('');
-  const typedWord = GS.typed.map(i => sArr[i].ch).join('');
-  const blanks = w.word.split('').map((_, i) => {
-    const ch = typedWord[i];
-    return `<span class="letter-blank">${ch ? escHtml(ch) : '&nbsp;'}</span>`;
-  }).join('');
-
-  $content().innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;padding:32px 16px;gap:20px">
-      <div style="text-align:center">
-        <div style="font-size:11px;text-transform:uppercase;font-weight:600;
-                    color:var(--text-sub);letter-spacing:.08em;margin-bottom:8px">
-          Spell the word
-        </div>
-        <div style="font-size:14px;color:var(--text-main);line-height:1.6;max-width:300px;text-align:center">
-          ${escHtml((w.definition || '').slice(0, 100))}${(w.definition || '').length > 100 ? '…' : ''}
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap" id="scramble-blanks">
-        ${blanks}
-      </div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        ${letterBtns}
-      </div>
-      <div style="display:flex;gap:12px">
-        <button class="btn-ghost" onclick="clearScramble()" style="font-size:13px">Clear</button>
-        <button class="btn-ghost" onclick="skipScramble()"
-                style="font-size:13px;color:var(--text-sub)">Skip</button>
-      </div>
-    </div>`;
-}
-
-function pickLetter(sIdx) {
-  if (GS.locked || GS.typed.includes(sIdx)) return;
-  GS.typed.push(sIdx);
-  const w         = GS.words[GS.idx];
-  const typedWord = GS.typed.map(i => GS.scrambled[i].ch).join('');
-  const full      = GS.typed.length === w.word.length;
-  _renderScrambleUI();
-  if (full) {
-    const correct   = typedWord.toLowerCase() === w.word.toLowerCase();
-    const elapsed_s = (Date.now() - GS.startTime) / 1000;
-    GS.locked = true;
-    const blanks = document.getElementById('scramble-blanks');
-    if (blanks) blanks.style.color = correct ? '#34C759' : '#FF3B30';
-    GS.results.push({ word: w.word, correct, elapsed_s });
-    GS.idx++;
-    setTimeout(() => _renderScrambleQuestion(), correct ? 700 : 1400);
-  }
-}
-
-function clearScramble() {
-  GS.typed = [];
-  _renderScrambleUI();
-}
-
-function skipScramble() {
-  if (GS.locked) return;
-  const w = GS.words[GS.idx];
-  GS.results.push({ word: w.word, correct: false, elapsed_s: 0, skipped: true });
-  GS.idx++;
-  _renderScrambleQuestion();
-}
-
-// ─── Speed Typing ──────────────────────────────────────────────────────────
-function renderSpeedTypingGame() {
-  const sess = S.gameSession;
-  if (!GS) {
-    GS = {
-      session_id:    sess.session_id,
-      game_id:       sess.game_id,
-      words:         shuffle([...sess.words]),
-      idx:           0,
-      results:       [],
-      locked:        false,
-      startTime:     0,
-      roundTimeLeft: sess.config.round_time_s || 60,
-      roundTimerId:  null,
-    };
-  }
-  _startSpeedRound();
-}
-
-function _startSpeedRound() {
-  if (GS.roundTimerId) clearInterval(GS.roundTimerId);
-  GS.roundTimerId = setInterval(() => {
-    GS.roundTimeLeft--;
-    const el = document.getElementById('speed-timer');
-    if (el) {
-      el.textContent = GS.roundTimeLeft + 's';
-      el.style.color = GS.roundTimeLeft <= 10 ? '#FF3B30' : 'var(--text-sub)';
-    }
-    if (GS.roundTimeLeft <= 0) {
-      clearInterval(GS.roundTimerId);
-      while (GS.idx < GS.words.length) {
-        GS.results.push({ word: GS.words[GS.idx].word, correct: false, elapsed_s: 0, skipped: true });
-        GS.idx++;
-      }
-      finishGame(GS.results);
-    }
-  }, 1000);
-  _renderSpeedQuestion();
-}
-
-function _renderSpeedQuestion() {
-  if (GS.idx >= GS.words.length) {
-    clearInterval(GS.roundTimerId);
-    finishGame(GS.results);
-    return;
-  }
-  const w       = GS.words[GS.idx];
-  GS.locked     = false;
-  GS.startTime  = Date.now();
-  const progress = `${GS.idx + 1} / ${GS.words.length}`;
-  setTopBar(`Speed Typing — ${progress}`, true);
-
-  $content().innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;padding:32px 16px;gap:20px">
-      <div style="display:flex;justify-content:space-between;width:100%;max-width:400px">
-        <div style="font-size:12px;color:var(--text-sub)">Round time</div>
-        <div id="speed-timer" style="font-size:14px;font-weight:700">${GS.roundTimeLeft}s</div>
-      </div>
-      <div style="text-align:center;max-width:360px">
-        <div style="font-size:11px;text-transform:uppercase;font-weight:600;
-                    color:var(--text-sub);letter-spacing:.08em;margin-bottom:10px">
-          Type this word
-        </div>
-        <div style="font-size:16px;color:var(--text-main);line-height:1.6">
-          ${escHtml((w.definition || '').slice(0, 120))}${(w.definition || '').length > 120 ? '…' : ''}
-        </div>
-        ${w.example ? `<div style="font-size:12px;color:var(--text-sub);margin-top:8px;font-style:italic">
-          "${escHtml(stripCite(w.example || '').slice(0, 80))}"</div>` : ''}
-      </div>
-      <div style="display:flex;gap:8px;width:100%;max-width:360px">
-        <input class="form-input" id="speed-input" type="text" style="flex:1;margin:0"
-               placeholder="Type the word…" autocomplete="off" autocorrect="off"
-               autocapitalize="off" spellcheck="false"
-               oninput="checkSpeedTyping(this.value)" autofocus>
-      </div>
-      <div id="speed-feedback" style="min-height:20px;font-size:13px"></div>
-      <button class="btn-ghost" onclick="skipSpeedWord()"
-              style="font-size:12px;color:var(--text-sub)">Skip</button>
-    </div>`;
-  setTimeout(() => { const inp = document.getElementById('speed-input'); if (inp) inp.focus(); }, 50);
-}
-
-function checkSpeedTyping(val) {
-  if (GS.locked) return;
-  const w = GS.words[GS.idx];
-  if (val.trim().toLowerCase() !== w.word.toLowerCase()) return;
-  GS.locked = true;
-  const elapsed_s = (Date.now() - GS.startTime) / 1000;
-  const fb  = document.getElementById('speed-feedback');
-  const inp = document.getElementById('speed-input');
-  if (fb)  { fb.textContent = `✓  ${w.word}`; fb.style.color = '#34C759'; }
-  if (inp) inp.style.borderColor = '#34C759';
-  GS.results.push({ word: w.word, correct: true, elapsed_s });
-  GS.idx++;
-  setTimeout(() => _renderSpeedQuestion(), 600);
-}
-
-function skipSpeedWord() {
-  if (GS.locked) return;
-  const w = GS.words[GS.idx];
-  GS.results.push({ word: w.word, correct: false, elapsed_s: 0, skipped: true });
-  GS.idx++;
-  _renderSpeedQuestion();
-}
-
-// ─── Battle MCQ ────────────────────────────────────────────────────────────
-function renderBattleMCQGame() {
-  const sess = S.gameSession;
-  if (!GS) {
-    GS = {
-      session_id: sess.session_id,
-      game_id:    sess.game_id,
-      words:      shuffle([...sess.words]),
-      idx:        0,
-      results:    [],
-      locked:     false,
-      lives:      sess.config.lives    || 3,
-      maxLives:   sess.config.lives    || 3,
-      streak:     0,
-      score:      0,
-      mcqCorrect: null,
-      startTime:  0,
-      timePerQ:   sess.config.time_per_q_s || 10,
-      timerId:    null,
-      timeLeft:   0,
-    };
-  }
-  _renderBattleQuestion();
-}
-
-function _renderBattleQuestion() {
-  if (GS.timerId) clearInterval(GS.timerId);
-  if (GS.idx >= GS.words.length || GS.lives <= 0) { finishGame(GS.results); return; }
-  const w      = GS.words[GS.idx];
-  GS.locked    = false;
-  GS.startTime = Date.now();
-  GS.timeLeft  = GS.timePerQ;
-  const others = GS.words.filter((_, i) => i !== GS.idx);
-  const decoys = shuffle([...others]).slice(0, 3).map(o => o.word);
-  GS.mcqCorrect = w.word;
-  const opts   = shuffle([w.word, ...decoys]);
-  const lives  = '❤️'.repeat(GS.lives) + '🖤'.repeat(Math.max(0, GS.maxLives - GS.lives));
-  const progress = `${GS.idx + 1} / ${GS.words.length}`;
-  setTopBar(`Battle MCQ — ${progress}`, true);
-
-  const optsHtml = opts.map(o => `
-    <button class="mcq-opt" data-val="${escHtml(o)}" onclick="answerBattle(this)">
-      ${escHtml(o)}
-    </button>`).join('');
-
-  $content().innerHTML = `
-    <div class="question-page">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:16px">${lives}</div>
-        <div style="font-size:13px;font-weight:700;color:#007AFF" id="battle-score">
-          Score: ${GS.score}
-        </div>
-        <div style="font-size:13px;font-weight:700;color:var(--warning)" id="battle-timer">
-          ${GS.timeLeft}s
-        </div>
-      </div>
-      ${GS.streak >= 2 ? `<div style="text-align:center;font-size:12px;font-weight:600;color:var(--warning)">
-        Streak ×${Math.min(GS.streak, 3)}</div>` : ''}
-      <div style="text-align:center;padding:16px 0">
-        <div style="font-size:11px;text-transform:uppercase;font-weight:600;
-                    color:var(--text-sub);letter-spacing:.08em;margin-bottom:10px">
-          Which word matches this definition?
-        </div>
-        <div style="font-size:15px;color:var(--text-main);line-height:1.6;max-width:320px;margin:0 auto">
-          ${escHtml((w.definition || '').slice(0, 150))}${(w.definition || '').length > 150 ? '…' : ''}
-        </div>
-      </div>
-      <div class="mcq-grid">${optsHtml}</div>
-    </div>`;
-
-  GS.timerId = setInterval(() => {
-    GS.timeLeft--;
-    const el = document.getElementById('battle-timer');
-    if (el) { el.textContent = GS.timeLeft + 's'; el.style.color = GS.timeLeft <= 3 ? '#FF3B30' : 'var(--warning)'; }
-    if (GS.timeLeft <= 0) { clearInterval(GS.timerId); if (!GS.locked) _battleTimeout(); }
-  }, 1000);
-}
-
-function _battleTimeout() {
-  if (GS.locked) return;
-  GS.locked = true;
-  const w = GS.words[GS.idx];
-  GS.lives--;
-  GS.streak = 0;
-  document.querySelectorAll('.mcq-opt').forEach(opt => {
-    opt.classList.add('locked');
-    if (opt.dataset.val === GS.mcqCorrect) opt.classList.add('reveal');
-  });
-  GS.results.push({ word: w.word, correct: false, elapsed_s: GS.timePerQ });
-  GS.idx++;
-  setTimeout(() => _renderBattleQuestion(), 1200);
-}
-
-function answerBattle(el) {
-  if (GS.locked) return;
-  GS.locked = true;
-  if (GS.timerId) clearInterval(GS.timerId);
-  const w         = GS.words[GS.idx];
-  const correct   = el.dataset.val === GS.mcqCorrect;
-  const elapsed_s = (Date.now() - GS.startTime) / 1000;
-  document.querySelectorAll('.mcq-opt').forEach(opt => {
-    opt.classList.add('locked');
-    if (opt.dataset.val === GS.mcqCorrect) opt.classList.add(correct ? 'correct' : 'reveal');
-  });
-  if (!correct) el.classList.add('wrong');
-  if (correct) {
-    GS.streak++;
-    GS.score += 10 * Math.min(GS.streak, 3);
-    const scoreEl = document.getElementById('battle-score');
-    if (scoreEl) scoreEl.textContent = `Score: ${GS.score}`;
-  } else {
-    GS.lives--;
-    GS.streak = 0;
-  }
-  GS.results.push({ word: w.word, correct, elapsed_s });
-  GS.idx++;
-  if (GS.lives <= 0) {
-    setTimeout(() => finishGame(GS.results), 1200);
-  } else {
-    setTimeout(() => _renderBattleQuestion(), correct ? 700 : 1200);
-  }
-}
-
-// ─── Unity Slot ────────────────────────────────────────────────────────────
-// ─── Unity WebGL (iframe, bundled) ────────────────────────────────────────
-//
-// Protocol (postMessage between parent page and Unity iframe):
-//   Unity → parent:  { type:'unity_ready' }
-//   parent → Unity:  { type:'session_init', session_id, words:[...], config:{} }
-//   Unity → parent:  { type:'unity_result', results:[{word,correct,elapsed_s},...] }
-//   Unity → parent:  { type:'unity_exit' }   (user quit without finishing)
-//
-// Unity jslib stub (put in Assets/Plugins/bridge.jslib):
-//   SendToParent: function(msg) {
-//     window.parent.postMessage(JSON.parse(UTF8ToString(msg)), '*');
-//   }
-// C#: [DllImport("__Internal")] static extern void SendToParent(string json);
-// Listen: window.addEventListener('message', e => unityInstance.SendMessage('Bridge','Receive',JSON.stringify(e.data)));
-
-async function renderUnitySlot() {
-  const sess = S.gameSession;
-  if (!GS) {
-    GS = {
-      session_id:  sess.session_id,
-      game_id:     sess.game_id,
-      words:       sess.words,
-      _msgHandler: null,
-    };
-  }
-  setTopBar('Unity WebGL Game', true);
-
-  const games = await api.get_unity_games();
-
-  if (!games || games.length === 0) {
-    $content().innerHTML = `
-      <div style="padding:0 32px 40px">
-        <div class="section-label" style="padding-left:0;padding-top:20px">No WebGL Games Found</div>
-        <div class="list-group" style="padding:20px">
-          <div style="font-size:14px;font-weight:600;margin-bottom:12px">How to add a Unity WebGL game</div>
-          <div style="font-size:13px;color:var(--text-sub);line-height:2">
-            1. In Unity, go to <b>File → Build Settings → WebGL → Build</b><br>
-            2. Copy the output folder into your app:<br>
-            <code style="display:inline-block;background:var(--bg);padding:4px 10px;
-                         border-radius:6px;margin:4px 0;font-size:12px">
-              gui/web/unity_games/&lt;game-name&gt;/
-            </code><br>
-            3. Make sure the folder contains <b>index.html</b><br>
-            4. Return here — the game will appear automatically
-          </div>
-        </div>
-        <div class="list-group" style="padding:16px;margin-top:12px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Unity bridge snippet</div>
-          <pre style="font-size:11px;color:var(--text-sub);line-height:1.7;white-space:pre-wrap;word-break:break-all">// bridge.jslib
-SendToParent: function(msg) {
-  window.parent.postMessage(
-    JSON.parse(UTF8ToString(msg)), '*');
-}
-
-// C# — receive words
-void Receive(string json) { /* parse session_init */ }
-
-// C# — send results
-SendToParent(JsonUtility.ToJson(new Result{
-  type="unity_result", results=...}));</pre>
-        </div>
-      </div>`;
-    return;
-  }
-
-  const gameCards = games.map(g => `
-    <div class="list-group" style="margin-bottom:10px;cursor:pointer"
-         onclick="launchUnityWebGL('${escHtml(g.url)}', '${escHtml(g.name)}')">
-      <div style="padding:16px;display:flex;align-items:center;gap:14px">
-        <div style="font-size:28px">🎮</div>
-        <div style="flex:1">
-          <div style="font-weight:600;font-size:15px">${escHtml(g.name)}</div>
-          <div style="font-size:12px;color:var(--text-sub);margin-top:2px">
-            ${GS.words.length} words · WebGL
-          </div>
-        </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </div>
-    </div>`).join('');
-
-  $content().innerHTML = `
-    <div style="padding:0 32px 40px">
-      <div class="section-label" style="padding-left:0">Select Game</div>
-      ${gameCards}
-    </div>`;
-}
-
-function launchUnityWebGL(url, name) {
-  setTopBar(escHtml(name), true);
-
-  // Attach postMessage bridge BEFORE iframe loads
-  if (GS._msgHandler) window.removeEventListener('message', GS._msgHandler);
-  GS._msgHandler = e => {
-    if (e.origin !== 'http://127.0.0.1:18765') return;  // only trust our own server
-    if (e.data && typeof e.data === 'object') _handleUnityMessage(e.data);
-  };
-  window.addEventListener('message', GS._msgHandler);
-
-  // Iframe fills the entire content area
-  $content().innerHTML = `
-    <iframe id="unity-frame" src="${escHtml(url)}"
-            style="flex:1;width:100%;border:none;display:block;background:#000"
-            allow="autoplay; fullscreen; microphone">
-    </iframe>`;
-}
-
-function _handleUnityMessage(msg) {
-  if (msg.type === 'unity_ready') {
-    // Push word list + session context into the iframe
-    const frame = document.getElementById('unity-frame');
-    if (frame && frame.contentWindow) {
-      frame.contentWindow.postMessage({
-        type:       'session_init',
-        session_id: GS.session_id,
-        words:      GS.words,
-        config:     S.gameSession.config || {},
-      }, 'http://127.0.0.1:18765');
-    }
-  } else if (msg.type === 'unity_result') {
-    _cleanUnityListeners();
-    finishGame(msg.results || []);
-  } else if (msg.type === 'unity_exit') {
-    _cleanUnityListeners();
-    GS = null;
-    navigate('games');
-  }
-}
-
-function _cleanUnityListeners() {
-  if (GS && GS._msgHandler) {
-    window.removeEventListener('message', GS._msgHandler);
-    GS._msgHandler = null;
-  }
-}
-
-// ─── Card Match ────────────────────────────────────────────────────────────
-function renderCardMatchGame() {
-  const sess = S.gameSession;
-  if (!GS) {
-    const deck = [];
-    sess.words.forEach((w, i) => {
-      deck.push({ id: `w${i}`, type: 'word', word: w.word, text: w.word });
-      deck.push({ id: `d${i}`, type: 'def',  word: w.word, text: w.definition || '' });
-    });
-    GS = {
-      session_id: sess.session_id,
-      game_id:    sess.game_id,
-      cards:      shuffle(deck),
-      flipped:    [],
-      matched:    new Set(),
-      results:    [],
-      attempts:   {},
-      wordStart:  {},
-      locked:     false,
-    };
-  }
-  _buildMatchGrid();
-}
-
-/* Build grid HTML once; subsequent state changes only touch classList. */
-function _matchScore() {
-  // 20pts per correct match, +10 bonus if elapsed < 5s, +5 if < 10s
-  return GS.results.reduce((sum, r) => {
-    if (!r.correct) return sum;
-    return sum + 20 + (r.elapsed_s < 5 ? 10 : r.elapsed_s < 10 ? 5 : 0);
-  }, 0);
-}
-
-function _buildMatchGrid() {
-  const { cards, matched, flipped } = GS;
-  const total = cards.length / 2;
-  setTopBar('Card Match', true);
-
-  const n    = cards.length;
-  const cols = Math.min(Math.max(Math.round(Math.sqrt(n)), 3), 6);
-
-  const cardsHtml = cards.map((c, idx) => {
-    const isUp      = flipped.includes(idx) || matched.has(c.word);
-    const isMatched = matched.has(c.word);
-    const cls = ['match-card', isUp ? 'flipped' : '', isMatched ? 'matched' : ''].filter(Boolean).join(' ');
-    // Front face (unflipped): show type badge as hint
-    const frontBadge = c.type === 'word'
-      ? `<span class="mc-badge word">Word</span>`
-      : `<span class="mc-badge def">Definition</span>`;
-    // Back face (flipped): show actual content only
-    const content = c.type === 'word'
-      ? `<span class="mc-text-word">${escHtml(c.text)}</span>`
-      : `<span class="mc-text-def">${escHtml((c.text || '').slice(0, 80))}${(c.text||'').length > 80 ? '…' : ''}</span>`;
-    return `
-      <div class="${cls}" data-idx="${idx}" onclick="flipMatchCard(${idx})">
-        <div class="match-card-inner">
-          <div class="match-card-front">${frontBadge}</div>
-          <div class="match-card-back">${content}</div>
-        </div>
-      </div>`;
-  }).join('');
-
-  $content().innerHTML = `
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;padding:12px 24px 24px;gap:12px">
-      <div style="display:flex;align-items:center;gap:24px;font-size:13px;color:var(--text-sub)">
-        <span>Matched <b style="color:var(--text-main)">${matched.size}</b> / ${total}</span>
-        <span id="match-score-display" style="font-size:15px;font-weight:700;color:var(--accent)">
-          ${_matchScore()} pts
-        </span>
-      </div>
-      <div id="match-grid" style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:10px;width:100%;max-width:600px">
-        ${cardsHtml}
-      </div>
-    </div>`;
-}
-
-/* Update only classList + score — preserves DOM so CSS transitions play. */
-function _updateMatchGrid() {
-  const { cards, matched, flipped } = GS;
-  const grid = document.getElementById('match-grid');
-  if (!grid) { _buildMatchGrid(); return; }
-  cards.forEach((c, idx) => {
-    const el = grid.querySelector(`[data-idx="${idx}"]`);
-    if (!el) return;
-    el.classList.toggle('flipped', flipped.includes(idx) || matched.has(c.word));
-    el.classList.toggle('matched', matched.has(c.word));
-  });
-  const scoreEl = document.getElementById('match-score-display');
-  if (scoreEl) scoreEl.textContent = `${_matchScore()} pts`;
-  // update matched counter text node
-  const counter = scoreEl && scoreEl.parentElement && scoreEl.parentElement.querySelector('span:first-child b');
-  if (counter) counter.textContent = matched.size;
-}
-
-function flipMatchCard(idx) {
-  if (GS.locked) return;
-  const card = GS.cards[idx];
-  if (GS.matched.has(card.word)) return;
-  if (GS.flipped.includes(idx)) return;
-  if (GS.flipped.length >= 2) return;
-
-  if (!GS.wordStart[card.word]) GS.wordStart[card.word] = Date.now();
-  GS.flipped.push(idx);
-  _updateMatchGrid();
-
-  if (GS.flipped.length < 2) return;
-
-  const [iA, iB] = GS.flipped;
-  const cA = GS.cards[iA], cB = GS.cards[iB];
-
-  if (cA.word === cB.word && cA.type !== cB.type) {
-    sfx('match');
-    // Correct match — wait for flip animation, then mark matched
-    GS.locked = true;
-    setTimeout(() => {
-      GS.matched.add(cA.word);
-      GS.flipped = [];
-      const elapsed_s = (Date.now() - (GS.wordStart[cA.word] || Date.now())) / 1000;
-      GS.results.push({ word: cA.word, correct: true, elapsed_s,
-                        attempts: (GS.attempts[cA.word] || 0) + 1 });
-      GS.locked = false;
-      if (GS.matched.size === GS.cards.length / 2) {
-        _updateMatchGrid();
-        setTimeout(() => finishGame(GS.results), 380);
-      } else {
-        _updateMatchGrid();
-      }
-    }, 460);
-  } else {
-    sfx('mismatch');
-    // Wrong pair — shake both, then flip back
-    GS.attempts[cA.word] = (GS.attempts[cA.word] || 0) + 1;
-    GS.attempts[cB.word] = (GS.attempts[cB.word] || 0) + 1;
-    GS.locked = true;
-    const grid = document.getElementById('match-grid');
-    if (grid) {
-      [iA, iB].forEach(i => {
-        const el = grid.querySelector(`[data-idx="${i}"]`);
-        if (el) { el.classList.remove('locked-wrong'); void el.offsetWidth; el.classList.add('locked-wrong'); }
-      });
-    }
-    setTimeout(() => {
-      GS.flipped = [];
-      GS.locked  = false;
-      _updateMatchGrid();
-    }, 950);
-  }
-}
-
-// ── Game Results ──────────────────────────────────────────────────────────
-async function renderGameResults() {
-  setTopBar('Game Over', true);
-  const d = S.gameResultData;
-  if (!d) { navigate('games'); return; }
-  if (d.error) {
-    $content().innerHTML = `<div style="padding:32px;text-align:center;color:var(--danger)">
-      Error: ${escHtml(d.error)}</div>`;
-    return;
-  }
-  const pct = typeof d.accuracy === 'number' ? Math.round(d.accuracy * 100) : 0;
-  const iconMap = { flash_memory:'🃏', word_scramble:'🔤', speed_typing:'⌨️', battle_mcq:'⚔️', unity_slot:'🎮', card_match:'🎴' };
-  const wordRows = (d.wordResults || []).filter(r => !r.skipped).map(r => `
-    <div style="display:flex;align-items:center;justify-content:space-between;
-                padding:10px 0;border-bottom:1px solid var(--border)">
-      <div>
-        <div style="font-weight:600;font-size:14px">${escHtml(r.word || '')}</div>
-        ${r.elapsed_s ? `<div style="font-size:11px;color:var(--text-sub)">${(+r.elapsed_s).toFixed(1)}s</div>` : ''}
-      </div>
-      <div style="font-size:12px;font-weight:600;border-radius:6px;padding:3px 9px;
-                  flex-shrink:0;margin-left:12px;
-                  color:${r.correct ? '#34C759' : '#FF3B30'};
-                  background:${r.correct ? '#34C75922' : '#FF3B3022'}">
-        ${r.correct ? 'Correct' : 'Wrong'}
-      </div>
-    </div>`).join('');
-
-  $content().innerHTML = `
-    <div style="flex:1;overflow-y:auto;min-height:0">
-      <div style="padding:0 0 40px">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;
-                    padding:24px;margin-bottom:20px;text-align:center">
-          <div style="font-size:48px;margin-bottom:8px">${iconMap[d.game_id] || '🏆'}</div>
-          <div style="font-size:22px;font-weight:700;margin-bottom:4px">Game Over!</div>
-          <div style="display:flex;justify-content:center;gap:24px;margin-top:20px">
-            <div style="text-align:center">
-              <div style="font-size:28px;font-weight:700">${d.score}</div>
-              <div style="font-size:12px;color:var(--text-sub)">Score</div>
-            </div>
-            <div style="text-align:center">
-              <div style="font-size:28px;font-weight:700">${pct}%</div>
-              <div style="font-size:12px;color:var(--text-sub)">Accuracy</div>
-            </div>
-            ${d.fsrs_updated > 0 ? `
-            <div style="text-align:center">
-              <div style="font-size:28px;font-weight:700">${d.fsrs_updated}</div>
-              <div style="font-size:12px;color:var(--text-sub)">FSRS Updated</div>
-            </div>` : ''}
-          </div>
-        </div>
-        ${wordRows ? `
-          <div class="section-label">Results</div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;
-                      padding:0 16px;margin-bottom:20px">
-            ${wordRows}
-          </div>` : ''}
-        <button class="btn-primary w100" onclick="navigate('games')" style="margin-bottom:8px">
-          Play Again
-        </button>
-        <button class="btn-ghost w100" onclick="finishGameToHome()">Back to Main Page</button>
-      </div>
-    </div>`;
-}
-
-function finishGameToHome() {
-  S.gameResultData = null;
-  S.gameSession    = null;
-  S.gameId         = null;
-  S.gameAllLearned = false;
-  S.page           = 'home';
-  S.history        = [];
-  renderHome();
-}
-
-/* ════════════════════════════════════════════════════════════════════════
    INIT
    ════════════════════════════════════════════════════════════════════════ */
-window.addEventListener('pywebviewready', () => {
+let _booted = false;
+function _boot() {
+  if (_booted) return;
+  _booted = true;
   render();
-});
+}
+window.addEventListener('pywebviewready', _boot);
 
-// Fallback for browser-based testing
-if (typeof window.pywebview === 'undefined') {
-  console.warn('PyWebView not detected — running in browser stub mode');
+// Fallback for browser-based dev / e2e: pywebview is never injected there, so
+// boot once we're confident it isn't coming and drive the HTTP bridge instead.
+if (typeof window.pywebview !== 'undefined') {
+  _boot();
+} else {
+  setTimeout(() => {
+    if (typeof window.pywebview === 'undefined') {
+      console.warn('PyWebView not detected — booting via HTTP bridge (dev/e2e mode)');
+      _boot();
+    }
+  }, 500);
 }

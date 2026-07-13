@@ -2,13 +2,11 @@ import datetime
 import json
 import logging
 import os
-import warnings
 from typing import Any, Dict, List, Optional
 
 from data.db.connection import DatabaseConnection
 from data.db.word_repo import WordRepository
 from data.db.book_repo import BookRepository
-from data.db.list_generator import ListGenerator
 from paths import data_path, ensure_parent_dir, ensure_user_data_seeded
 
 
@@ -18,18 +16,13 @@ class LibraryService:
         self.logger = logging.getLogger(__name__)
         self._database_dir = data_path("database")
         self.db_path = str(self._database_dir / "vocabulary.db")
-        self._lists_dir = data_path("lists")
-        self._fsrs_dir = data_path("fsrs")
         ensure_parent_dir(self._database_dir / "dummy")
-        self._lists_dir.mkdir(parents=True, exist_ok=True)
-        self._fsrs_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize database and run any pending migrations
         self.db_conn = DatabaseConnection(self.db_path)
         self.db_conn.initialize_database()
         self.word_repo = WordRepository(self.db_path)
         self.book_repo = BookRepository(self.db_path)
-        self.list_gen = ListGenerator(self.db_path)
 
         self.renew_app_info()
 
@@ -255,63 +248,10 @@ class LibraryService:
         self.word_repo.add_words_to_book(wordbook_name, vocab_dict)
         return f"Successfully added {len(vocab_dict)} vocabularies!"
 
-    # ── List generation ─────────────────────────────────────────
-
-    def generate_new_list_from_book(self, count: int, bookname: str = None, is_extra: bool = False):
-        if is_extra:
-            app_info = self.get_app_info()
-            if app_info["can_generate_list"]:
-                app_info["can_generate_list"] = False
-            else:
-                return
-        self.list_gen.generate_vocab_list_with_fsrs(
-            count=count,
-            vocab_output_path=str(self._lists_dir),
-            fsrs_output_path=str(self._fsrs_dir),
-            book_name=bookname if bookname != "All" else None,
-            is_extra=is_extra,
-        )
-
-    def generate_review_list(self):
-        result = self.list_gen.generate_vocab_list_with_fsrs(
-            count=100,
-            vocab_output_path=str(self._lists_dir),
-            fsrs_output_path=str(self._fsrs_dir),
-            due_only=True,
-        )
-        if not result.get("success"):
-            app_info = self.get_app_info()
-            app_info["today_review_completed"] = True
-            self.update_app_info(app_info)
-
-    def load_back_fsrs_data(self, json_file_name):
-        self.word_repo.import_fsrs_data(str(self._fsrs_dir / json_file_name))
-
-    # ── Data access ─────────────────────────────────────────────
-
-    def get_list_data(self, file_name: str) -> dict:
-        with open(self._lists_dir / file_name, "r", encoding="UTF-8") as f:
-            return json.load(f)
-
-    def update_list_info(self, file_name: str, info: dict):
-        list_path = self._lists_dir / file_name
-        with open(list_path, "r", encoding="UTF-8") as f:
-            data = json.load(f)
-        data["XXInfoXX"] = info
-        with open(list_path, "w", encoding="UTF-8") as f:
-            json.dump(data, f, indent=4)
+    # ── Book queries ────────────────────────────────────────────
 
     def get_book_names(self, details: bool = False):
         return self.book_repo.get_all_books(details)
-
-    def get_list_names(self, bookname: str) -> list[str]:
-        result = []
-        for name in os.listdir(self._lists_dir):
-            with open(self._lists_dir / name, "r", encoding="UTF-8") as f:
-                info = json.load(f)["XXInfoXX"]
-                if info["From"] == bookname or bookname == "All":
-                    result.append(name)
-        return result
 
     def get_book_complete_percentage(self, bookname) -> dict:
         if bookname != "All":
@@ -730,8 +670,6 @@ class LibraryService:
         """Full factory reset — wipes everything and rebuilds from scratch."""
         self._initialize_app_info()
         self._delete_data(self._database_dir)
-        self._delete_data(self._fsrs_dir)
-        self._delete_data(self._lists_dir)
         self.db_conn.initialize_database()
         self.initialize_calender_info()
 
