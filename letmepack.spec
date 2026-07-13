@@ -35,10 +35,6 @@ a = Analysis(
         'openpyxl',
         'openpyxl.styles',
         'openpyxl.utils',
-        # websockets (optional, gracefully degrades)
-        'websockets',
-        'websockets.server',
-        'websockets.exceptions',
     ],
     hookspath=[],
     hooksconfig={},

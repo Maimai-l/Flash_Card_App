@@ -1,4 +1,3 @@
 pywebview>=4.0
 fsrs
 openpyxl
-websockets>=12.0

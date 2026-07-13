@@ -131,6 +131,9 @@ class DatabaseConnection:
             # Check for junction table
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Word_Book_Words'")
             has_junction = cursor.fetchone() is not None
+            # Check for Word_Overrides table (added in v9) — query before closing.
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Word_Overrides'")
+            has_overrides = cursor.fetchone() is not None
             conn.close()
             if "book_identities" in cols or not has_junction:
                 return 1 if "book_identities" in cols else 0
@@ -140,9 +143,7 @@ class DatabaseConnection:
                 return 3
             if "phone_us" not in cols:
                 return 5  # v4→v5 adds phone columns
-            # Check for Word_Overrides table (added in v9)
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Word_Overrides'")
-            if not cursor.fetchone():
+            if not has_overrides:
                 return 8
             return SCHEMA_VERSION
         except Exception:
@@ -317,8 +318,8 @@ class DatabaseConnection:
             return 0
 
     def _import_bundled_word_lists(self):
-        from data.db.book_repo import BookRepository
-        from data.db.word_repo import WordRepository
+        from db.book_repo import BookRepository
+        from db.word_repo import WordRepository
 
         book_repo = BookRepository(self.db_path)
         word_repo = WordRepository(self.db_path)
