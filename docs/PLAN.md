@@ -1,8 +1,22 @@
 # FlashCard App 架构重构 + 卡牌游戏《Word Spire · 词塔》总体规划
 
-> 状态:规划完成,待实施
+> 状态:重构进行中(Phase 0–2 已完成并推送;Phase 3 前端拆分进行中);游戏 Phase 4–6 待细化设计
 > 分支:`claude/card-game-architecture-plan-sve02s`
 > 日期:2026-07-12
+
+---
+
+## 0. 实施进度
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| Phase 0 开发/验证基建 | ✅ 完成 | `FLASHCARD_USER_DATA` 覆盖、无窗模式、`gui/dev_bridge.py`、pytest 夹具 + Playwright e2e(`tests/e2e/run.sh`) |
+| Phase 1 移除旧游戏与死代码 | ✅ 完成 | 删约 2,400 行(6 游戏 + Unity 桥 + 死代码);顺带修 `_detect_actual_version` 游标越界 bug |
+| Phase 2 后端分层 | ✅ 完成 | `api(门面) → services/ → db/(仓储)`;拆掉 778 行上帝对象;SQL 收敛;修日历初始化 bug + 改名;`data/` 净化为纯资产 |
+| Phase 3 前端 ES modules 拆分 | 🚧 进行中 | `app.js`(1978 行)拆为 `js/core` + `js/views`,CSS 分文件,内联 onclick → data-action 委托;以 e2e 网看护行为等价 |
+| Phase 4–6 游戏(后端/前端/内容) | ⏸ 待细化 | 游戏细节需再规划后实施(见 §4) |
+
+验证基建:`python3 -m pytest tests/`(16 项)+ `bash tests/e2e/run.sh`(冒烟 + 交互:导航/背单词会话/答题/导入/设置持久化)。
 
 ---
 
