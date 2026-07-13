@@ -36,7 +36,12 @@ echo "[e2e] running Playwright smoke"
 BASE_URL="http://127.0.0.1:$PORT" node "$ROOT/tests/e2e/smoke.mjs"
 RC=$?
 
-if [ $RC -ne 0 ]; then
+echo "[e2e] running Playwright interaction"
+BASE_URL="http://127.0.0.1:$PORT" node "$ROOT/tests/e2e/interaction.mjs"
+RC2=$?
+
+if [ $RC -ne 0 ] || [ $RC2 -ne 0 ]; then
   echo "[e2e] server log tail:"; tail -20 "$UD/server.log"
+  exit 1
 fi
-exit $RC
+exit 0
