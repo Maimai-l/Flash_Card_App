@@ -13,8 +13,10 @@
 | Phase 0 开发/验证基建 | ✅ 完成 | `FLASHCARD_USER_DATA` 覆盖、无窗模式、`gui/dev_bridge.py`、pytest 夹具 + Playwright e2e(`tests/e2e/run.sh`) |
 | Phase 1 移除旧游戏与死代码 | ✅ 完成 | 删约 2,400 行(6 游戏 + Unity 桥 + 死代码);顺带修 `_detect_actual_version` 游标越界 bug |
 | Phase 2 后端分层 | ✅ 完成 | `api(门面) → services/ → db/(仓储)`;拆掉 778 行上帝对象;SQL 收敛;修日历初始化 bug + 改名;`data/` 净化为纯资产 |
-| Phase 3 前端 ES modules 拆分 | 🚧 进行中 | `app.js`(1978 行)拆为 `js/core` + `js/views`,CSS 分文件,内联 onclick → data-action 委托;以 e2e 网看护行为等价 |
-| Phase 4–6 游戏(后端/前端/内容) | ⏸ 待细化 | 游戏细节需再规划后实施(见 §4) |
+| Phase 3 前端 ES modules 拆分 | ✅ 完成 | `app.js`(1978 行)拆为 `js/core`(6)+ `js/views`(5)+ `main.js`,CSS 分 4 文件;52 个内联 on* 全部改为 data-action 事件委托;`PS` 迁至 `store.PS`。行为经 e2e 网 + 机械审计 + 对抗式审查(5 维 finder→逐条独立复核,0 确认分歧)三重验证等价 |
+| Phase 4–6 游戏(后端/前端/内容) | ⏸ 待细化 | 游戏细节需再规划后实施(见 §4);重构已为其留好接缝(路由注册表、`store` 状态、`services/game/` 目录位、`css/game.css` 占位) |
+
+**重构部分(Phase 0–3)已全部完成、验证并推送。** 游戏部分(Phase 4–6)待游戏细节规划确定后实施。
 
 验证基建:`python3 -m pytest tests/`(16 项)+ `bash tests/e2e/run.sh`(冒烟 + 交互:导航/背单词会话/答题/导入/设置持久化)。
 
