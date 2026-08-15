@@ -1,101 +1,259 @@
-// Deeper interaction e2e — exercises the click/keyboard/input handlers that the
-// module split converts to event delegation. Resilient assertions (advance /
-// no-crash / text present) so it passes identically before and after the split.
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const { execSync } = require('child_process');
-const globalRoot = execSync('npm root -g').toString().trim();
-const { chromium } = require(globalRoot + '/playwright');
+/* Browser pass over every screen.
+ *
+ *   node tests/e2e/interaction.mjs [baseUrl]
+ *
+ * Needs Playwright and a running server (default http://127.0.0.1:8737).
+ * It resets the database it talks to, so point it at a throwaway one:
+ *
+ *   KC_USER_DATA=/tmp/kc-e2e python main.py --no-browser &
+ *   node tests/e2e/interaction.mjs
+ */
 
-const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:18765';
-const CHROMIUM = process.env.PW_CHROMIUM ||
-  execSync("ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome | head -1").toString().trim();
+import { chromium } from 'playwright';
 
-let failures = 0;
-function check(cond, msg) { if (!cond) { console.error('  ✗', msg); failures++; } else { console.log('  ✓', msg); } }
+const BASE = process.argv[2] || 'http://127.0.0.1:8737';
+const failures = [];
+let checks = 0;
 
-const browser = await chromium.launch({ executablePath: CHROMIUM });
-const page = await browser.newPage();
-const errors = [];
-page.on('console', m => {
-  if (m.type() !== 'error') return;
-  const t = m.text();
-  if (/favicon/.test(t) || /Failed to load resource.*404/.test(t)) return;
-  errors.push(t);
+function check(label, condition) {
+  checks += 1;
+  if (!condition) failures.push(label);
+}
+
+async function call(method, args = []) {
+  const response = await fetch(`${BASE}/api`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method, args }),
+  });
+  return response.json();
+}
+
+const CARDS = {
+  deck: 'Mathematics::Linear Algebra',
+  cards: [
+    { front: 'Define an eigenvector of $A$', back: 'A nonzero $v$ with $Av=\\lambda v$.' },
+    { front: 'Rank-nullity theorem', back: '$\\operatorname{rank}(A)+\\operatorname{nullity}(A)=n$' },
+    { front: 'What is a basis?', back: 'A linearly independent spanning set.' },
+  ],
+  quiz: {
+    name: 'LA basics',
+    subject: 'Mathematics',
+    questions: [
+      { type: 'mcq', prompt: 'Which is NOT an axiom?', options: ['Closure', 'Multiplicative inverse', 'Associativity'], answer: 1, explain: 'Additive, not multiplicative.' },
+      { type: 'cloze', text: 'rank(A) + {{nullity(A)}} = {{n}}' },
+      { type: 'short', prompt: 'Eigenvalue symbol?', answers: ['lambda', 'λ'] },
+      { type: 'ordering', prompt: 'Order the steps', items: ['First', 'Second', 'Third'] },
+    ],
+  },
+};
+
+await call('reset_all');
+await call('update_settings', [{ default_new_limit: '50', default_review_limit: '200', language: 'en' }]);
+await call('import_commit', [JSON.stringify(CARDS)]);
+await call('import_commit', [JSON.stringify({
+  deck: 'Computer Science::Networks',
+  cards: [{ front: 'What does ARP resolve?', back: 'IP to MAC on the local link.' }],
+})]);
+
+const browser = await chromium.launch({
+  executablePath: process.env.PLAYWRIGHT_CHROMIUM || '/opt/pw-browsers/chromium',
 });
-page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+page.setDefaultTimeout(8000);
 
-async function goHome() {
-  await page.goto(`${BASE_URL}/index.html`, { waitUntil: 'networkidle' });
-  await page.waitForSelector('.home-layout', { timeout: 8000 });
-  await page.waitForTimeout(300);
-}
+const consoleErrors = [];
+page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
 
-// 1. Navigation round-trip: home -> settings -> back -> import -> back
-console.log('[nav]');
-await goHome();
-await page.click('#settings-btn');
-await page.waitForTimeout(400);
-check(/Daily Goals/.test(await page.textContent('#content')), 'settings opens');
-await page.click('#back-btn');
-await page.waitForTimeout(400);
-check(/.home-layout/ || await page.$('.home-layout'), 'back returns home');
+await page.goto(`${BASE}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForSelector('.due-card');
 
-// 2. Session: start -> flashcard -> flip -> advance to practice -> answer
-console.log('[session]');
-await page.click('text=Start Session');
-await page.waitForSelector('.flashcard-wrap', { timeout: 8000 });
-check(true, 'flashcard renders');
-await page.click('.flashcard-wrap');
+// ── Home ──────────────────────────────────────────────────────────────────
+check('deck tree lists both subjects',
+  await page.locator('.deck-item:has-text("Mathematics")').count() === 1
+  && await page.locator('.deck-item:has-text("Computer Science")').count() === 1);
+check('all four cards are offered',
+  (await page.locator('.due-figure .value').first().textContent()).trim() === '4');
+check('limits are described as per-subject, not summed',
+  (await page.locator('.limit-line').textContent()).includes('Each subject'));
+
+// ── Review ────────────────────────────────────────────────────────────────
+await page.click('.deck-item:has-text("Linear Algebra")');
 await page.waitForTimeout(300);
-check(await page.$('.flashcard-inner.flipped') !== null, 'card flips on click');
-// advance through all flashcards to reach practice
-for (let i = 0; i < 15; i++) {
-  const practice = await page.$('#answer-input');
-  if (practice) break;
-  const btn = await page.$('button.btn-primary');
-  if (btn) await btn.click();
-  await page.waitForTimeout(150);
-}
-check(await page.$('#answer-input') !== null, 'reaches practice (FIG input)');
-// submit a (likely wrong) answer -> should show feedback and/or MCQ fallback
-await page.fill('#answer-input', 'zzzwrong');
-await page.click('text=Check');
-await page.waitForTimeout(500);
-const afterAnswer = await page.textContent('#content');
-const advanced = /Fill in the Gap|Choose|Correct|Again|Definition|\/ /.test(afterAnswer)
-  || await page.$('.mcq-opt') !== null;
-check(advanced, 'answer submission advances (feedback / MCQ / next)');
-// if MCQ appeared, click an option
-const mcq = await page.$('.mcq-opt');
-if (mcq) { await mcq.click(); await page.waitForTimeout(400); check(true, 'MCQ option clickable'); }
+await page.click('button:has-text("Study")');
+await page.waitForSelector('.card-front');
+check('maths renders on the front', await page.locator('.card-front .katex').count() > 0);
+check('no rating buttons before the answer', await page.locator('.rating-btn').count() === 0);
 
-// 3. Import: tab switching + words-only lookup renders
-console.log('[import]');
-await goHome();
-await page.click('text=Import');
-await page.waitForTimeout(400);
-check(/Words Only|Format/.test(await page.textContent('#content')), 'import page renders');
-await page.click('#tab-clip').catch(() => {});
+await page.keyboard.press(' ');
+await page.waitForSelector('.rating-btn');
+check('four ratings, each with an interval',
+  await page.locator('.rating-btn').count() === 4
+  && (await page.locator('.rating-btn .interval').first().textContent()).trim().length > 0);
+
+await page.keyboard.press('1');                       // Again
 await page.waitForTimeout(300);
-check(/Clipboard|Separator|separator|Paste/i.test(await page.textContent('#content')), 'clipboard tab switches');
+const afterAgain = await page.locator('.counter').textContent();
+check('Again requeues the card into this sitting', afterAgain.includes('/ 4'));
 
-// 4. Settings persist: change slider -> save -> reload -> persisted
-console.log('[settings persist]');
-await goHome();
-await page.click('#settings-btn');
-await page.waitForSelector('#count-slider', { timeout: 5000 });
-await page.$eval('#count-slider', el => { el.value = '35'; el.dispatchEvent(new Event('input')); });
-await page.click('text=Save Changes');
+await page.keyboard.press('z');                       // undo it
+await page.waitForTimeout(400);
+check('undo returns to an unanswered card',
+  await page.locator('.rating-btn').count() === 0
+  && (await page.locator('.counter').textContent()).startsWith('0'));
+
+// edit the current card in place
+await page.keyboard.press('e');
+await page.waitForSelector('#edit-front');
+await page.fill('#edit-back', 'Edited during review');
+await page.click('button:has-text("Save")');
+await page.waitForTimeout(400);
+await page.keyboard.press(' ');
+await page.waitForSelector('.card-back');
+check('inline edit is visible immediately',
+  (await page.locator('.card-back').textContent()).includes('Edited during review'));
+
+for (let i = 0; i < 60; i++) {
+  if (await page.locator('.result-score').count()) break;
+  if (await page.locator('.rating-btn').count()) await page.keyboard.press('3');
+  else if (await page.locator('button:has-text("Show answer")').count()) await page.keyboard.press(' ');
+  await page.waitForTimeout(180);
+}
+check('the session reaches a summary', await page.locator('.result-score').count() === 1);
+check('summary offers more study without obligation',
+  await page.locator('button:has-text("Study more")').count() === 1);
+await page.click('button:has-text("Done")');
+await page.waitForSelector('.due-card');
+
+// ── Quiz ──────────────────────────────────────────────────────────────────
+await page.click('.nav-link:has-text("Quiz")');
+await page.waitForSelector('.quiz-row-name');
+check('quiz says it has never been taken',
+  (await page.locator('.quiz-row-meta').first().textContent()).includes('never taken'));
+
+await page.click('button:has-text("Start")');
+await page.waitForSelector('.opt');
+await page.click('.opt >> nth=2');                    // wrong on purpose
+await page.waitForTimeout(300);
+check('a wrong choice is marked wrong', await page.locator('.opt.wrong').count() === 1);
+check('the right choice is shown', await page.locator('.opt.correct').count() === 1);
+check('the explanation appears', await page.locator('.q-explain').count() === 1);
+check('quizzes never ask you to self-rate', await page.locator('.rating-btn').count() === 0);
+
+await page.keyboard.press('Enter');
+await page.waitForSelector('.cloze-blank');
+await page.fill('.cloze-blank >> nth=0', 'NULLITY(a)');   // loose matching
+await page.fill('.cloze-blank >> nth=1', 'n');
+await page.keyboard.press('Enter');
+await page.waitForTimeout(300);
+check('cloze is graded, not advanced, by one Enter',
+  await page.locator('.cloze-blank.correct').count() === 2);
+
+await page.keyboard.press('Enter');
+await page.waitForSelector('#short-input');
+await page.fill('#short-input', '  Lambda ');
+await page.keyboard.press('Enter');
+await page.waitForTimeout(300);
+check('short answer ignores case and padding', await page.locator('.opt.correct').count() === 1);
+
+await page.keyboard.press('Enter');
+await page.waitForSelector('.order-item');
+check('ordering shuffles the items',
+  (await page.locator('.order-item .order-body').allTextContents()).join('|') !== 'First|Second|Third');
+await page.click('button:has-text("Check")');
+await page.waitForTimeout(300);
+await page.keyboard.press('Enter');
+await page.waitForSelector('.result-score');
+check('results show a score out of four',
+  (await page.locator('.result-score').textContent()).includes('/ 4'));
+check('wrong answers can be retried alone',
+  await page.locator('button:has-text("Retry wrong")').count() === 1);
+await page.click('button:has-text("Done")');
+await page.waitForSelector('.quiz-row-name');
+check('the attempt is recorded',
+  !(await page.locator('.quiz-row-meta').first().textContent()).includes('never taken'));
+
+// ── Cards ─────────────────────────────────────────────────────────────────
+await page.click('.nav-link:has-text("Cards")');
+await page.waitForSelector('.card-table');
+const rows = await page.locator('.card-table tbody tr').count();
+check('the table lists the deck', rows === 3);
+await page.fill('#card-search', 'basis');
 await page.waitForTimeout(500);
-await goHome();
-await page.click('#settings-btn');
-await page.waitForSelector('#count-slider', { timeout: 5000 });
-const persisted = await page.$eval('#count-slider', el => el.value);
-check(persisted === '35', `daily-new-limit persisted (got ${persisted})`);
+check('search narrows the table', await page.locator('.card-table tbody tr').count() === 1);
+await page.fill('#card-search', '');
+await page.waitForTimeout(500);
 
-check(errors.length === 0, 'no console errors: ' + JSON.stringify(errors));
+await page.click('button:has-text("New card")');
+await page.waitForSelector('#card-front');
+await page.fill('#card-front', 'Added from the UI');
+await page.fill('#card-back', 'It saved');
+await page.click('.modal button:has-text("Save")');
+await page.waitForTimeout(600);
+check('a new card appears in the table',
+  await page.locator('.card-table tbody tr').count() === rows + 1);
+
+// ── Import ────────────────────────────────────────────────────────────────
+await page.click('.nav-link:has-text("Import")');
+await page.waitForSelector('#import-text');
+await page.fill('#import-text', JSON.stringify({
+  deck: 'Exams::TMUA',
+  cards: [{ front: 'Change of base', back: '$\\log_a b = \\frac{\\log_c b}{\\log_c a}$' }, { front: 'no back here' }],
+}));
+await page.click('button:has-text("Validate")');
+await page.waitForSelector('.preview-figures');
+check('the preview counts what would be created',
+  (await page.locator('.preview-figure .value').first().textContent()).trim() === '1');
+check('the bad entry is reported, not fatal',
+  await page.locator('.issue.error').count() === 1);
+// Not `button:has-text("Import")` — that also matches the nav link.
+await page.click('[data-action="commitImport"]');
+await page.waitForTimeout(900);
+const decksAfterImport = (await call('get_decks')).map((deck) => deck.path);
+check('importing creates the new subject', decksAfterImport.includes('Exams::TMUA'));
+check('importing writes only the good card',
+  (await call('get_overview', ['Exams'])).total_cards === 1);
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+await page.click('.nav-link:has-text("Stats")');
+await page.waitForSelector('.stat-grid');
+check('stats report the reviews just made',
+  Number((await page.locator('.stat-tile .value').nth(1).textContent()).trim()) > 0);
+
+// ── Settings and language ─────────────────────────────────────────────────
+await page.click('.nav-link:has-text("Settings")');
+await page.waitForSelector('.setting-row');
+check('each subject can carry its own limits',
+  await page.locator('[data-change="setDeckLimit"]').count() >= 4);
+await page.selectOption('select[data-change="setLanguage"]', 'zh');
+await page.waitForTimeout(600);
+check('the interface switches to Chinese',
+  (await page.locator('#brand').textContent()).trim() === '知识卡片');
+await page.selectOption('select[data-change="setLanguage"]', 'en');
+await page.waitForTimeout(600);
+
+// ── Browse leaves the schedule alone ──────────────────────────────────────
+await page.click('.nav-link:has-text("Home")');
+await page.waitForSelector('.due-card');
+const beforeBrowse = JSON.stringify(await call('get_overview', ['']));
+await page.click('button:has-text("Browse")');
+await page.waitForSelector('.card-front');
+await page.keyboard.press(' ');
+await page.keyboard.press('ArrowRight');
+await page.waitForTimeout(300);
+await page.keyboard.press('Escape');
+await page.waitForSelector('.due-card');
+check('browsing changes nothing', JSON.stringify(await call('get_overview', [''])) === beforeBrowse);
+
+check('no console errors anywhere', consoleErrors.length === 0);
 
 await browser.close();
-console.log(failures ? `\n✗ interaction e2e FAILED (${failures})` : '\n✓ interaction e2e passed');
-process.exitCode = failures ? 1 : 0;
+
+if (failures.length || consoleErrors.length) {
+  console.error(`FAIL — ${failures.length} of ${checks} checks failed`);
+  failures.forEach((label) => console.error(`  ✗ ${label}`));
+  consoleErrors.forEach((line) => console.error(`  ! ${line}`));
+  process.exit(1);
+}
+console.log(`OK — ${checks} checks passed`);

@@ -1,86 +1,66 @@
+"""
+Entry point: start the local server and open the app in a browser.
+
+    python main.py                run and open a browser
+    python main.py --no-browser   run without opening one
+    python main.py --port 9000    use a specific port
+"""
+
+from __future__ import annotations
+
+import argparse
 import logging
-import os
+import sys
 import threading
-import functools
-import http.server
+import webbrowser
 
-from gui.api import Api
-from services.context import AppContext
-from gui.dev_bridge import dev_bridge_enabled, make_handler
-from paths import BASE_PATH, USER_DATA_ROOT
+from paths import LOG_PATH, WEB_DIR
+from version import __version__
 
-_LOG_PATH = USER_DATA_ROOT / "app.log"
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(_LOG_PATH, encoding="utf-8"),
-    ],
-)
-logging.info("Resource base path resolved to: %s", BASE_PATH)
-logging.info("Log file: %s", _LOG_PATH)
-
-WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gui", "web")
-PORT = 18765
+DEFAULT_PORT = 8737
 
 
-def _start_file_server(directory: str, port: int, api=None) -> None:
-    """
-    Serve gui/web/ over localhost so WKWebView loads CSS/JS without file:// quirks.
-
-    When the dev bridge is enabled (FLASHCARD_DEV_BRIDGE=1, non-frozen) and an
-    api object is supplied, the same server also answers POST /api so a plain
-    browser or Playwright can drive the app without a native window.
-    """
-    if api is not None and dev_bridge_enabled():
-        handler = make_handler(directory, api)
-        logging.warning("Dev bridge ENABLED — POST /api is live (development only)")
-    else:
-        handler = functools.partial(
-            http.server.SimpleHTTPRequestHandler,
-            directory=directory,
-        )
-        # suppress request log spam
-        handler.log_message = lambda *a: None
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
-    t = threading.Thread(target=server.serve_forever, daemon=True)
-    t.start()
-
-
-def main():
-    context = AppContext()
-    api = Api(context)
-
-    _start_file_server(WEB_DIR, PORT, api)
-
-    # Headless mode for tests / e2e: no native window (pywebview needs a GUI
-    # backend that isn't present in CI containers). The HTTP + dev bridge server
-    # above is enough to drive the SPA.
-    if os.environ.get("FLASHCARD_NO_WINDOW") == "1":
-        logging.warning("FLASHCARD_NO_WINDOW=1 — running headless; Ctrl-C to exit")
-        import time
-        try:
-            while True:
-                time.sleep(3600)
-        except KeyboardInterrupt:
-            pass
-        return
-
-    import webview
-    webview.create_window(
-        title="FlashCard App",
-        url=f"http://127.0.0.1:{PORT}/index.html",
-        js_api=api,
-        min_size=(900, 600),
-        width=1100,
-        height=700,
-        resizable=True,
-        text_select=False,
+def _configure_logging(verbose: bool) -> None:
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        handlers=[logging.StreamHandler(), logging.FileHandler(LOG_PATH, encoding="utf-8")],
     )
-    webview.start(debug=False)
+
+
+def _parse_args(argv):
+    parser = argparse.ArgumentParser(description="Knowledge Cards — local flashcard server")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+    _configure_logging(args.verbose)
+
+    from app.api import Api
+    from app.context import AppContext
+    from app.server import AppServer, find_free_port
+
+    context = AppContext()
+    server = AppServer(str(WEB_DIR), Api(context), find_free_port(args.port)).start()
+
+    logging.info("Knowledge Cards %s", __version__)
+    logging.info("Database: %s", context.db_path)
+    print(f"\n  Knowledge Cards is running at {server.url}\n  Press Ctrl-C to stop.\n")
+
+    if not args.no_browser:
+        threading.Timer(0.4, webbrowser.open, args=(server.url,)).start()
+
+    try:
+        threading.Event().wait()
+    except KeyboardInterrupt:
+        print("\n  Stopping.\n")
+        server.stop()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

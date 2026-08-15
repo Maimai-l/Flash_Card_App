@@ -1,0 +1,20 @@
+{
+  "deck": "Mathematics::Linear Algebra",
+  "cards": [
+    {"front": "Define an eigenvector of $A$", "back": "A **nonzero** vector $v$ such that $Av = \\lambda v$ for some scalar $\\lambda$.\n\n$\\lambda$ is the corresponding eigenvalue.", "tags": ["definition"], "hint": "think about direction"},
+    {"front": "Rank-nullity theorem", "back": "$$\\operatorname{rank}(A) + \\operatorname{nullity}(A) = n$$where $n$ is the number of columns."},
+    {"front": "When is $A$ diagonalisable?", "back": "When it has $n$ linearly independent eigenvectors.\n\n- Distinct eigenvalues is sufficient\n- Not necessary"},
+    {"front": "Define the trace of a matrix", "back": "The sum of the diagonal entries. $\\operatorname{tr}(AB)=\\operatorname{tr}(BA)$.", "deck": "Mathematics::Linear Algebra"},
+    {"front": "What is a basis?", "back": "A linearly independent spanning set."}
+  ],
+  "quiz": {
+    "name": "Linear Algebra — Ch.3",
+    "subject": "Mathematics",
+    "questions": [
+      {"type": "mcq", "prompt": "Which is NOT a vector space axiom?", "options": ["Closure under addition", "A multiplicative inverse for every vector", "Associativity of addition", "Existence of a zero vector"], "answer": 1, "explain": "Vector spaces require additive inverses, not multiplicative ones."},
+      {"type": "cloze", "text": "rank(A) + {{nullity(A)}} = {{n|dim V}}", "explain": "The rank-nullity theorem."},
+      {"type": "short", "prompt": "Symbol conventionally used for an eigenvalue?", "answers": ["lambda", "λ"]},
+      {"type": "ordering", "prompt": "Order the steps of Gaussian elimination", "items": ["Forward elimination to row echelon form", "Back substitution", "Read off the solution"]}
+    ]
+  }
+}

@@ -1,3 +1,1 @@
-pywebview>=4.0
-fsrs
-openpyxl
+fsrs>=6.0

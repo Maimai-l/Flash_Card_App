@@ -1,50 +1,129 @@
-# FlashCard App
+# Knowledge Cards
 
-A desktop vocabulary learning app for macOS, built with Python + pywebview.
+A local flashcard app for knowledge points — maths, computer science, exam
+material. Runs a small Python server on your own machine and opens in a browser.
+No account, no network, no cloud; everything lives in one SQLite file.
 
-## Features
+Cards are written by an LLM and pasted in as JSON. The app schedules them and
+gets out of the way.
 
-- **FSRS spaced repetition** — Smart scheduling based on the Free Spaced Repetition Scheduler algorithm. Words are reviewed at optimal intervals based on your performance.
-- **Multiple word books** — Comes bundled with CET-4/6, TOEFL, and GRE-8000 word lists. Import your own via Excel, JSON, TXT, or clipboard.
-- **Daily sessions** — Each day you get a fixed set of new words + due reviews. Rate each word (Again / Hard / Good / Easy) to update its schedule.
-- **Mini Games** — Practice with Card Match (flip-card matching game). More games coming.
-- **Study calendar** — Visual history of completed study days.
-- **Import / Export** — Import word lists from spreadsheets or text files; export the app log for debugging.
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| UI | HTML/CSS/JS (SPA) via pywebview |
-| Backend | Python 3.11+ |
-| Database | SQLite (auto-migrated, v1→v8) |
-| Scheduling | FSRS algorithm (`fsrs` library) |
-| Packaging | PyInstaller (macOS `.app`) |
-
-## Running in Development
+## Running
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# Run
 python main.py
 ```
 
-## Building
+That starts a server on `127.0.0.1:8737` and opens your browser. `Ctrl-C` stops it.
 
 ```bash
-pyinstaller letmepack.spec -y
-cp -R dist/FlashCardApp.app
+python main.py --no-browser      # run without opening a browser
+python main.py --port 9000       # use a different port
 ```
 
-The built app is self-contained — no Python installation required on the target machine.
+The server binds to loopback only and refuses cross-origin requests, so nothing
+else on your network — or in another browser tab — can reach it.
 
-## Data Storage
+## The two halves
 
-User data (database, logs, settings) is stored in:
+**Cards** are persistent. Front, back, scheduled by
+[FSRS](https://github.com/open-spaced-repetition/py-fsrs). You grade yourself
+`Again / Hard / Good / Easy` (keys `1`–`4`), because a flashcard has no answer a
+machine can check.
+
+**Quizzes** are one-off. A fixed set of questions — multiple choice, cloze, short
+answer, ordering — with the answer key written into the JSON. The app marks them,
+so there is no self-rating, and nothing you do in a quiz touches any card's
+schedule.
+
+The two never mix. That is the whole design.
+
+## Daily limits
+
+Every subject has its own cap on new cards and reviews per day. Anything beyond
+the cap simply does not appear — the backlog is shown as a quiet line of text,
+not a red badge, and *Spread out* will flatten an accumulated pile across the
+next few days.
+
+Limits belong to top-level decks. Studying a chapter draws from its subject's
+budget rather than getting a fresh one, and studying "all decks" walks each
+subject's budget separately instead of merging them into a single pool.
+
+There are no streaks and no targets. *Study more* on the finish screen ignores
+the cap for that sitting and changes nothing about tomorrow. *Browse* reads
+through a deck without scheduling anything at all.
+
+## Importing
+
+Paste JSON into the Import page. *Copy schema for LLM* puts a full worked
+specification on your clipboard to hand to a model; paste back what it produces.
+Import previews exactly what it would do before writing anything, and skips bad
+entries rather than rejecting the whole paste.
+
+The format is documented in [docs/SCHEMA.md](docs/SCHEMA.md). Sample files live
+in [samples/](samples/).
+
+## Keyboard
+
+| Key | Where | Does |
+|---|---|---|
+| `Space` | reviewing | show the answer |
+| `1` `2` `3` `4` | reviewing | Again / Hard / Good / Easy |
+| `E` | reviewing | edit the current card in place |
+| `Z` | reviewing | undo the last rating |
+| `H` | reviewing | show the hint |
+| `←` `→` | browsing | previous / next card |
+| `1`…`9` | quiz | pick an option |
+| `Enter` | quiz | check, then advance |
+| `Esc` | anywhere | leave the session |
+
+## Layout
+
 ```
-~/Library/Application Support/FlashCardApp/
+main.py              start the server, open a browser
+paths.py             where data and resources live
+app/
+  api.py             every method callable over POST /api
+  server.py          static files + JSON dispatch, loopback only
+  context.py         the object graph, wired once
+  db/                schema and repositories (all SQL lives here)
+  services/          scheduling, limits, quizzes, import/export, stats
+web/
+  index.html         the shell
+  css/               tokens, components, per-view layout
+  js/core/           transport, state, router, DOM, i18n, text rendering
+  js/views/          one module per screen
+  js/questions/      one module per question type
+  vendor/katex/      bundled maths rendering, no CDN
+tests/               pytest over repositories, services and HTTP
 ```
 
-Resetting the app from Settings wipes study progress and user-imported books, while keeping the bundled word lists intact.
+## Data
+
+One SQLite file, plus a log:
+
+| Platform | Location |
+|---|---|
+| macOS | `~/Library/Application Support/KnowledgeCards/` |
+| Linux | `~/.local/share/KnowledgeCards/` |
+| Windows | `%APPDATA%\KnowledgeCards\` |
+
+`KC_USER_DATA=/some/path` points the app somewhere else, which is how the tests
+run against a throwaway directory.
+
+Export from the Cards page for a portable backup; copy `knowledge.db` for a
+complete one.
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests/            # repositories, services, HTTP layer
+node tests/e2e/interaction.mjs     # browser pass over every screen
+```
+
+The e2e run needs Playwright and a server already running on port 8737.
+
+## Language
+
+English and 中文, switched in Settings. Card content is never translated.

@@ -29,3 +29,8 @@ youdao_cache/
 # Database WAL files (generated at runtime)
 *.db-shm
 *.db-wal
+
+# Local runtime data
+*.db
+*.log
+node_modules/

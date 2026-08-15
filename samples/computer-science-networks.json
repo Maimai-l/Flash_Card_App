@@ -1,0 +1,57 @@
+{
+  "deck": "Computer Science::Networks",
+  "cards": [
+    {
+      "id": "net.tcp.handshake",
+      "front": "Why is the TCP handshake three steps rather than two?",
+      "back": "Two steps cannot confirm the client's *receive* capability, and a delayed duplicate SYN would leave the server holding a dead connection.\n\nThree steps also synchronise sequence numbers in both directions.",
+      "tags": ["tcp", "interview"]
+    },
+    {
+      "id": "net.arp",
+      "front": "What does ARP resolve?",
+      "back": "An IP address to a MAC address, on the local link only."
+    },
+    {
+      "id": "net.mtu",
+      "front": "What is the MTU, and what happens when a packet exceeds it?",
+      "back": "The largest payload a link will carry in one frame. An oversized IPv4 packet is fragmented; in IPv6 it is dropped and the sender is told via *Packet Too Big*."
+    },
+    {
+      "id": "net.tcp.vs.udp",
+      "front": "One sentence: TCP versus UDP",
+      "back": "TCP is an ordered, reliable byte stream with congestion control; UDP is unordered, unreliable datagrams with none of it.",
+      "hint": "think about what the protocol promises"
+    }
+  ],
+  "quiz": {
+    "id": "net.transport.basics",
+    "name": "Transport layer basics",
+    "subject": "Computer Science",
+    "questions": [
+      {
+        "type": "mcq",
+        "prompt": "Which of these is **not** provided by TCP?",
+        "options": ["Ordered delivery", "Congestion control", "Guaranteed latency", "Retransmission of lost segments"],
+        "answer": 2,
+        "explain": "TCP promises delivery, not timeliness. Nothing in TCP bounds latency."
+      },
+      {
+        "type": "cloze",
+        "text": "The TCP handshake is SYN, {{SYN-ACK|SYN ACK}}, then {{ACK}}.",
+        "explain": "Three segments, two directions of sequence-number synchronisation."
+      },
+      {
+        "type": "short",
+        "prompt": "Which layer of the OSI model does TCP sit at?",
+        "answers": ["transport", "layer 4", "4"],
+        "match": "loose"
+      },
+      {
+        "type": "ordering",
+        "prompt": "Order these by what a packet meets first, leaving your machine",
+        "items": ["Application", "Transport", "Network", "Data link"]
+      }
+    ]
+  }
+}

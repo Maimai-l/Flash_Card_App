@@ -1,3 +1,2 @@
-# Development-only dependencies (tests, e2e). Not bundled into the app.
 -r requirements.txt
 pytest
