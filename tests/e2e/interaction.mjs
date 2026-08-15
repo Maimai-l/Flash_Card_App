@@ -77,6 +77,9 @@ check('all four cards are offered',
   (await page.locator('.due-figure .value').first().textContent()).trim() === '4');
 check('limits are described as per-subject, not summed',
   (await page.locator('.limit-line').textContent()).includes('Each subject'));
+check('the state breakdown actually paints its bars',
+  await page.locator('.states-card .bar-fill').first().evaluate((el) =>
+    el.getBoundingClientRect().width) > 0);
 
 // ── Review ────────────────────────────────────────────────────────────────
 await page.click('.deck-item:has-text("Linear Algebra")');

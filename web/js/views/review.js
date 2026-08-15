@@ -11,7 +11,7 @@
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
 import { $content, esc, attr, showToast, setKeys, typingInInput, showModal, closeModal } from '../core/dom.js';
-import { richBlock } from '../core/render.js';
+import { flashcardHtml, setFlipped } from './flashcard.js';
 import { t } from '../core/i18n.js';
 import { navigate } from '../core/router.js';
 
@@ -60,7 +60,7 @@ function progress() {
   return { done: session.answers, total: session.answers + remaining };
 }
 
-function shell(inner, { counter = '', foot = '' } = {}) {
+function shell(inner, { counter = '', foot = null } = {}) {
   const deckLabel = S.deck ? S.deck.split('::').pop() : t('all_decks');
   return `
     <div class="study">
@@ -71,7 +71,10 @@ function shell(inner, { counter = '', foot = '' } = {}) {
         <span class="counter">${esc(counter)}</span>
       </div>
       <div class="study-body"><div class="study-inner">${inner}</div></div>
-      ${foot ? `<div class="study-foot"><div class="study-foot-inner">${foot}</div></div>` : ''}
+      ${foot === null ? '' : `
+        <div class="study-foot">
+          <div class="study-foot-inner" id="study-foot">${foot}</div>
+        </div>`}
     </div>`;
 }
 
@@ -81,48 +84,43 @@ function paint() {
 
   const card = session.current;
   const { done, total } = progress();
-  const counter = `${done} / ${total}`;
 
-  const face = session.revealed
-    ? `
-      <div class="card-face">
-        ${richBlock(card.front, 'card-front')}
-        <div class="card-divider"></div>
-        <div class="card-back-wrap">${richBlock(card.back, 'card-back')}</div>
-        ${card.tags.length ? `<div class="card-tags">${
-          card.tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}</div>` : ''}
-      </div>`
-    : `
-      <div class="card-face">
-        ${richBlock(card.front, 'card-front')}
-        ${card.hint ? (session.hintShown
-          ? `<div class="card-hint">${esc(card.hint)}</div>`
-          : `<div class="mt24"><button class="btn-text" data-action="showHint">${esc(t('hint'))}</button></div>`
-        ) : ''}
-      </div>`;
+  $content().innerHTML = shell(
+    flashcardHtml(card, { flipped: session.revealed, hintShown: session.hintShown }),
+    { counter: `${done} / ${total}`, foot: footHtml() },
+  );
+  setKeys(onKey);
+}
 
-  const foot = session.revealed
-    ? `
-      <div class="rating-row">
-        ${RATINGS.map(({ value, key }) => `
-          <button class="rating-btn" data-action="rate" data-rating="${value}" data-rating-key>
-            <span class="label">${esc(t(key))}</span>
-            <span class="interval">${esc((card.intervals || {})[value] || '')}</span>
-          </button>`).join('')}
-      </div>
-      <div class="hint-line">
-        <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> ${esc(t('keys_rate'))}
-        &nbsp;·&nbsp; <kbd>E</kbd> ${esc(t('key_edit'))}
-        &nbsp;·&nbsp; <kbd>Z</kbd> ${esc(t('key_undo'))}
-      </div>`
-    : `
+/** The footer swaps between reveal and rate; the card above it stays put. */
+function footHtml() {
+  const session = S.session;
+  const card = session.current;
+  if (!session.revealed) {
+    return `
       <div class="reveal-row">
-        <button class="btn btn-primary" data-action="reveal">${esc(t('show_answer'))}</button>
+        <button class="btn btn-primary btn-lg" data-action="reveal">${esc(t('show_answer'))}</button>
       </div>
       <div class="hint-line"><kbd>Space</kbd></div>`;
+  }
+  return `
+    <div class="rating-row">
+      ${RATINGS.map(({ value, key }) => `
+        <button class="rating-btn" data-action="rate" data-rating="${value}">
+          <span class="label">${esc(t(key))}</span>
+          <span class="interval">${esc((card.intervals || {})[value] || '')}</span>
+        </button>`).join('')}
+    </div>
+    <div class="hint-line">
+      <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> ${esc(t('keys_rate'))}
+      &nbsp;·&nbsp; <kbd>E</kbd> ${esc(t('key_edit'))}
+      &nbsp;·&nbsp; <kbd>Z</kbd> ${esc(t('key_undo'))}
+    </div>`;
+}
 
-  $content().innerHTML = shell(face, { counter, foot });
-  setKeys(onKey);
+function paintFoot() {
+  const foot = document.getElementById('study-foot');
+  if (foot) foot.innerHTML = footHtml();
 }
 
 function paintSummary() {
@@ -209,9 +207,11 @@ async function rate(rating) {
 
 export const actions = {
   reveal: () => {
-    if (!S.session || !S.session.current) return;
+    if (!S.session || !S.session.current || S.session.revealed) return;
     S.session.revealed = true;
-    paint();
+    setFlipped(true);   // turn the card in place; a re-render would skip the animation
+    paintFoot();
+    setKeys(onKey);
   },
 
   showHint: () => {

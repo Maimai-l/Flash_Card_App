@@ -73,9 +73,11 @@ function paint() {
         <span class="counter">${S.quiz.index + 1} / ${S.quiz.questions.length}</span>
       </div>
       <div class="study-body"><div class="study-inner">
-        <div id="q-root">${type.render(question, state)}</div>
-        ${state.answered && question.explain
-          ? `<div class="q-explain">${rich(question.explain)}</div>` : ''}
+        <div class="q-card">
+          <div id="q-root">${type.render(question, state)}</div>
+          ${state.answered && question.explain
+            ? `<div class="q-explain">${rich(question.explain)}</div>` : ''}
+        </div>
       </div></div>
       <div class="study-foot"><div class="study-foot-inner">
         <div class="reveal-row">
@@ -88,7 +90,9 @@ function paint() {
             </button>` : ''}
         </div>
         <div class="hint-line">${
-          state.answered ? '<kbd>Enter</kbd>' : (showCheck ? '<kbd>Enter</kbd>' : '<kbd>1</kbd>…')
+          state.answered || showCheck
+            ? '<kbd>Enter</kbd>'
+            : `<kbd>1</kbd>–<kbd>${(question.options || []).length}</kbd> ${esc(t('keys_answer'))}`
         }</div>
       </div></div>
     </div>`;

@@ -37,7 +37,7 @@
              "Noto Sans CJK SC", sans-serif;
   --font-num: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, .05);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 16px rgba(0, 0, 0, .045);
   --shadow-pop:  0 12px 40px rgba(0, 0, 0, .16);
 }
 
@@ -45,8 +45,8 @@ html, body { height: 100%; }
 
 body {
   font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 14.5px;
+  line-height: 1.55;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -105,7 +105,17 @@ a { color: var(--blue); text-decoration: none; }
 }
 #sidebar[hidden] { display: none; }
 
-#content { flex: 1; min-width: 0; padding: 24px 28px 64px; }
+#content { flex: 1; min-width: 0; padding: 28px 32px 64px; animation: settle .22s ease-out; }
+@keyframes settle {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
 #content.full { padding: 0; height: 100vh; overflow: hidden; }
 
 .page { max-width: 940px; margin: 0 auto; }
@@ -113,8 +123,8 @@ a { color: var(--blue); text-decoration: none; }
 .prose { max-width: var(--read-width); }
 
 /* ── Typography helpers ─────────────────────────────────────────────────── */
-h1 { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
-h2 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+h1 { font-size: 25px; font-weight: 600; letter-spacing: -.025em; }
+h2 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
 .sub { color: var(--text-sub); }
 .faint { color: var(--text-faint); }
 .small { font-size: 12px; }

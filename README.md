@@ -124,6 +124,17 @@ node tests/e2e/interaction.mjs     # browser pass over every screen
 
 The e2e run needs Playwright and a server already running on port 8737.
 
+## Authoring cards
+
+`.claude/skills/knowledge-cards/` is a Claude Code skill that standardises how
+cards get written — deck naming, field conventions, the atomicity rule, and the
+distractor rules for quiz questions. Ask Claude for cards inside this repository
+and it applies automatically; elsewhere, copy the folder into that project's
+`.claude/skills/`.
+
+The Import page's *Copy schema for LLM* button covers the mechanical format for
+one-off use without the skill.
+
 ## Language
 
 English and 中文, switched in Settings. Card content is never translated.

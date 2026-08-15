@@ -31,7 +31,7 @@ const en = {
 
   show_answer: 'Show answer', hint: 'Hint',
   again: 'Again', hard: 'Hard', good: 'Good', easy: 'Easy',
-  keys_rate: 'to rate', key_edit: 'edit', key_undo: 'undo',
+  keys_rate: 'to rate', keys_answer: 'to answer', key_edit: 'edit', key_undo: 'undo',
   session_done: 'Session finished',
   session_summary: '{cards} cards · {answers} answers',
   undo_nothing: 'Nothing to undo',
@@ -127,7 +127,7 @@ const zh = {
 
   show_answer: '显示答案', hint: '提示',
   again: '重来', hard: '困难', good: '良好', easy: '简单',
-  keys_rate: '评分', key_edit: '编辑', key_undo: '撤销',
+  keys_rate: '评分', keys_answer: '作答', key_edit: '编辑', key_undo: '撤销',
   session_done: '本轮结束',
   session_summary: '{cards} 张卡片 · {answers} 次作答',
   undo_nothing: '没有可撤销的记录',

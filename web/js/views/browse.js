@@ -6,7 +6,7 @@
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
 import { $content, esc, attr, setKeys, typingInInput } from '../core/dom.js';
-import { richBlock } from '../core/render.js';
+import { flashcardHtml, setFlipped } from './flashcard.js';
 import { t } from '../core/i18n.js';
 import { navigate } from '../core/router.js';
 
@@ -55,13 +55,7 @@ function paint() {
         <span class="counter">${state.index + 1} / ${state.cards.length}</span>
       </div>
       <div class="study-body"><div class="study-inner">
-        <div class="card-face">
-          ${richBlock(card.front, 'card-front')}
-          ${state.revealed ? `
-            <div class="card-divider"></div>
-            <div class="card-back-wrap">${richBlock(card.back, 'card-back')}</div>` : ''}
-          ${card.hint && !state.revealed ? `<div class="card-hint">${esc(card.hint)}</div>` : ''}
-        </div>
+        ${flashcardHtml(card, { flipped: state.revealed, hintShown: true })}
       </div></div>
       <div class="study-foot"><div class="study-foot-inner">
         <div class="reveal-row">
@@ -87,8 +81,7 @@ function onKey(event) {
   if (event.key === 'ArrowRight') { event.preventDefault(); return step(1); }
   if (event.key === ' ' || event.key === 'Enter') {
     event.preventDefault();
-    S.browse.revealed = !S.browse.revealed;
-    paint();
+    toggle();
   }
 }
 
@@ -101,8 +94,15 @@ function step(direction) {
   paint();
 }
 
+function toggle() {
+  S.browse.revealed = !S.browse.revealed;
+  setFlipped(S.browse.revealed);
+  const button = document.querySelector('[data-action="browseToggle"]');
+  if (button) button.textContent = S.browse.revealed ? t('front') : t('show_answer');
+}
+
 export const actions = {
   browseStep: (el) => step(Number(el.dataset.dir)),
-  browseToggle: () => { S.browse.revealed = !S.browse.revealed; paint(); },
+  browseToggle: () => toggle(),
   exitBrowse: () => { S.browse = null; navigate('home'); },
 };

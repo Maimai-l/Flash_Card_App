@@ -1,23 +1,38 @@
 /* ── Home ───────────────────────────────────────────────────────────────── */
-.home-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; }
+.home-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 22px; }
 .home-head h1 { line-height: 1.2; }
 
-.due-card { padding: 24px; text-align: center; }
+/* Two columns on a wide window: the due card carries the actions, the heatmap
+   fills the space that used to sit empty beside it. */
+.home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: start;
+}
+.heat-card { width: max-content; max-width: 100%; grid-column: 2; grid-row: 1; }
+.states-card { grid-column: 1; grid-row: 2; }
+@media (max-width: 1080px) {
+  .home-grid { grid-template-columns: minmax(0, 1fr); }
+  .heat-card, .states-card { width: auto; grid-column: 1; grid-row: auto; }
+}
+
+.due-card { padding: 34px 28px 30px; text-align: center; }
 .due-figures {
   display: flex;
   justify-content: center;
-  gap: 44px;
-  margin: 4px 0 22px;
+  gap: 52px;
+  margin: 6px 0 26px;
 }
 .due-figure { display: flex; flex-direction: column; gap: 2px; }
 .due-figure .value {
-  font-size: 30px;
+  font-size: 38px;
   font-weight: 600;
-  letter-spacing: -.02em;
+  letter-spacing: -.03em;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
-.due-figure .label { font-size: 12px; color: var(--text-sub); }
+.due-figure .label { font-size: 12.5px; color: var(--text-sub); }
 .due-figure.zero .value { color: var(--text-faint); }
 .due-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
 
@@ -92,35 +107,87 @@
   min-height: 0;
   overflow-y: auto;
 }
-.study-inner { width: 100%; max-width: 660px; }
+.study-inner { width: 100%; max-width: 720px; }
 
-.card-face { text-align: center; }
-.card-front { font-size: 23px; font-weight: 500; line-height: 1.45; letter-spacing: -.01em; }
-.card-divider {
-  width: 200px;
-  height: 1px;
-  background: var(--border);
-  margin: 22px auto;
+/* The flashcard: one surface, two faces, stacked in a single grid cell so the
+   card keeps one height and can turn over. */
+.flashcard { perspective: 1600px; width: 100%; }
+.flashcard-inner {
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform .5s cubic-bezier(.36, .66, .3, 1);
 }
-.card-back { font-size: 16px; line-height: 1.7; color: var(--text); text-align: left; }
-.card-back-wrap { display: flex; justify-content: center; }
-.card-back-wrap .card-back { max-width: var(--read-width); }
+.flashcard-inner.flipped { transform: rotateY(180deg); }
+.flashcard-face {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, .07), 0 1px 2px rgba(0, 0, 0, .04);
+  padding: 44px 48px 38px;
+  min-height: 340px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.flashcard-face.back { transform: rotateY(180deg); }
+.face-label {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-faint);
+}
+.flashcard-face { position: relative; }
+.face-body { width: 100%; }
+
+.card-front { font-size: 24px; font-weight: 500; line-height: 1.45; letter-spacing: -.015em; }
+.card-back {
+  font-size: 16.5px;
+  line-height: 1.72;
+  text-align: left;
+  max-width: var(--read-width);
+  margin: 0 auto;
+}
+.card-back p:first-child { font-size: 17.5px; }
+
+/* The prompt, echoed above the answer so it is still readable while grading. */
+.face-echo {
+  font-size: 13.5px;
+  color: var(--text-sub);
+  line-height: 1.5;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.face-echo .katex { font-size: 1em; }
 .card-hint {
-  margin-top: 20px;
+  margin-top: 22px;
   font-size: 13px;
   color: var(--text-sub);
   font-style: italic;
 }
-.card-tags { margin-top: 22px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.card-hint-btn { margin-top: 20px; }
+.card-tags { margin-top: 24px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
 
 .study-foot {
   flex-shrink: 0;
+  box-shadow: 0 -1px 0 var(--border-soft);
   border-top: 1px solid var(--border-soft);
   background: var(--surface);
   padding: 14px 20px 16px;
 }
 .study-foot-inner {
-  max-width: 660px;
+  max-width: 720px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -138,23 +205,25 @@
   padding: 0 4px;
 }
 
-.rating-row { display: flex; gap: 10px; }
+.rating-row { display: flex; gap: 12px; }
 .rating-btn {
-  min-width: 96px;
-  border: 1px solid var(--border);
+  min-width: 112px;
+  border: 1.5px solid var(--border);
   background: var(--surface);
-  border-radius: var(--r-sm);
-  padding: 8px 12px 7px;
+  border-radius: 10px;
+  padding: 11px 14px 9px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .03);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1px;
   transition: border-color .12s, background .12s;
 }
-.rating-btn:hover { background: var(--surface-alt); border-color: #C4C4CA; }
-.rating-btn .label { font-size: 13.5px; font-weight: 500; }
+.rating-btn:hover { background: var(--surface-alt); border-color: #B4B4BB; }
+.rating-btn:active { transform: scale(.97); }
+.rating-btn .label { font-size: 14.5px; font-weight: 500; }
 .rating-btn .interval {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -169,11 +238,27 @@
 .quiz-row-name { font-size: 14px; font-weight: 500; }
 .quiz-row-meta { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
 
-.q-prompt { font-size: 18px; font-weight: 500; line-height: 1.5; margin-bottom: 22px; }
+/* Questions sit on the same surface the flashcard does, so the two study
+   screens read as one app. Options are inset within it rather than floating. */
+.q-card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, .07), 0 1px 2px rgba(0, 0, 0, .04);
+  padding: 36px 40px 34px;
+  min-height: 340px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.q-prompt { font-size: 19.5px; font-weight: 500; line-height: 1.5; margin-bottom: 24px; }
 .q-explain {
-  margin-top: 18px;
-  padding: 12px 14px;
-  background: var(--surface-alt);
+  margin-top: 20px;
+  padding: 13px 15px;
+  background: var(--bg);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-sm);
   font-size: 13.5px;
@@ -188,15 +273,16 @@
   gap: 10px;
   text-align: left;
   width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 11px 14px;
-  font-size: 14px;
+  background: var(--surface-alt);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 15px;
   line-height: 1.5;
-  transition: border-color .12s, background .12s;
+  transition: border-color .12s, background .12s, transform .1s;
 }
-.opt:hover:not(.locked) { border-color: #B9B9C0; background: var(--surface-alt); }
+.opt:hover:not(.locked) { border-color: #9A9AA4; background: var(--surface); }
+.opt:active:not(.locked) { transform: scale(.995); }
 .opt .opt-key {
   font-size: 11px;
   color: var(--text-faint);
@@ -234,11 +320,11 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 10px 12px;
-  font-size: 14px;
+  background: var(--surface-alt);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14.5px;
 }
 .order-item.correct { border-color: var(--green); background: rgba(52, 199, 89, .07); }
 .order-item.wrong { border-color: var(--red); background: rgba(255, 59, 48, .05); }
@@ -336,7 +422,15 @@
 .bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; }
 .bar-row .bar-label { width: 62px; color: var(--text-sub); }
 .bar-row .bar-track { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
-.bar-row .bar-fill { height: 100%; border-radius: 4px; background: var(--text-sub); }
+/* display:block — width has no effect on an inline box, which is what a bare
+   <span> is, and the fill silently rendered at zero width. */
+.bar-row .bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--text-sub);
+  transition: width .3s ease-out;
+}
 .bar-row .bar-value { width: 44px; text-align: right; font-variant-numeric: tabular-nums;
                       color: var(--text-sub); }
 

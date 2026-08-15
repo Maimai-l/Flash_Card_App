@@ -45,12 +45,13 @@ export async function renderHome() {
     : (overview.new_done + overview.review_done > 0 ? t('caught_up') : t('nothing_due'));
 
   $content().innerHTML = `
-    <div class="page">
+    <div class="page-wide">
       <div class="home-head">
         <h1>${esc(title)}</h1>
         <span class="sub small">${overview.total_cards} ${esc(t(overview.total_cards === 1 ? 'card' : 'cards'))}</span>
       </div>
 
+      <div class="home-grid">
       <div class="card due-card">
         ${total > 0 ? `
           <div class="due-figures">
@@ -88,9 +89,36 @@ export async function renderHome() {
           </div>` : ''}
       </div>
 
-      <div class="section-label mt24">${esc(t('review_activity'))}</div>
-      <div class="card card-pad">${heatmapHtml(heat)}</div>
+        <div class="card card-pad heat-card">
+          <div class="section-label">${esc(t('review_activity'))}</div>
+          ${heatmapHtml(heat)}
+        </div>
+
+        ${hasCards ? `
+          <div class="card card-pad states-card">
+            <div class="section-label">${esc(t('total_cards'))}</div>
+            ${statesHtml(overview.states, overview.total_cards)}
+          </div>` : ''}
+      </div>
     </div>`;
+}
+
+/* How the deck is distributed across the three FSRS states. */
+function statesHtml(states, total) {
+  const rows = [
+    ['state_new', states.new, 'var(--heat-3)'],
+    ['state_learning', states.learning, 'var(--orange)'],
+    ['state_review', states.review, 'var(--green)'],
+  ];
+  return rows.map(([key, value, colour]) => `
+    <div class="bar-row">
+      <span class="bar-label">${esc(t(key))}</span>
+      <span class="bar-track">
+        <span class="bar-fill" style="width:${
+          Math.round(100 * value / Math.max(1, total))}%;background:${colour}"></span>
+      </span>
+      <span class="bar-value">${value}</span>
+    </div>`).join('');
 }
 
 /* ── Heatmap ────────────────────────────────────────────────────────────── */

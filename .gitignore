@@ -22,7 +22,8 @@ youdao_cache/
 .vscode/
 *.swp
 *.swo
-.claude
+.claude/*
+!.claude/skills/
 # macOS
 .DS_Store
 
