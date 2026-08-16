@@ -118,7 +118,7 @@ complete one.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/            # repositories, services, HTTP layer
+python -m pytest tests/            # repositories, services, HTTP, skill validator
 node tests/e2e/interaction.mjs     # browser pass over every screen
 ```
 
@@ -131,6 +131,19 @@ cards get written — deck naming, field conventions, the atomicity rule, and th
 distractor rules for quiz questions. Ask Claude for cards inside this repository
 and it applies automatically; elsewhere, copy the folder into that project's
 `.claude/skills/`.
+
+It ships a validator, and the skill requires running it before handing anything
+over:
+
+```bash
+python3 .claude/skills/knowledge-cards/scripts/validate_cards.py cards.json --strict
+```
+
+Errors are things the app would reject or silently mishandle; warnings are
+authoring rules. Standard library only, so it runs wherever the skill is copied.
+`tests/test_skill_validator.py` asserts the validator flags everything the app's
+importer rejects, so the two cannot drift apart, and holds `samples/` to a clean
+`--strict` run.
 
 The Import page's *Copy schema for LLM* button covers the mechanical format for
 one-off use without the skill.

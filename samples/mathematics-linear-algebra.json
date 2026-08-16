@@ -1,20 +1,125 @@
 {
   "deck": "Mathematics::Linear Algebra",
   "cards": [
-    {"front": "Define an eigenvector of $A$", "back": "A **nonzero** vector $v$ such that $Av = \\lambda v$ for some scalar $\\lambda$.\n\n$\\lambda$ is the corresponding eigenvalue.", "tags": ["definition"], "hint": "think about direction"},
-    {"front": "Rank-nullity theorem", "back": "$$\\operatorname{rank}(A) + \\operatorname{nullity}(A) = n$$where $n$ is the number of columns."},
-    {"front": "When is $A$ diagonalisable?", "back": "When it has $n$ linearly independent eigenvectors.\n\n- Distinct eigenvalues is sufficient\n- Not necessary"},
-    {"front": "Define the trace of a matrix", "back": "The sum of the diagonal entries. $\\operatorname{tr}(AB)=\\operatorname{tr}(BA)$.", "deck": "Mathematics::Linear Algebra"},
-    {"front": "What is a basis?", "back": "A linearly independent spanning set."}
+    {
+      "id": "la.eigenvector.def",
+      "front": "Define an eigenvector of $A$",
+      "back": "A **nonzero** vector $v$ such that $Av = \\lambda v$ for some scalar $\\lambda$.\n\n- $\\lambda$ is the corresponding eigenvalue\n- Zero is excluded, or every scalar would qualify",
+      "hint": "think about direction",
+      "tags": ["definition"]
+    },
+    {
+      "id": "la.rank-nullity.statement",
+      "front": "State the rank-nullity theorem",
+      "back": "$$\\operatorname{rank}(A) + \\operatorname{nullity}(A) = n$$\n\nwhere $n$ is the number of columns of $A$.",
+      "tags": ["theorem"]
+    },
+    {
+      "id": "la.diagonalisable.condition",
+      "front": "When is an $n \\times n$ matrix diagonalisable?",
+      "back": "When it has $n$ linearly independent eigenvectors.\n\n- $n$ distinct eigenvalues is sufficient but not necessary\n- $I$ is diagonalisable with one repeated eigenvalue",
+      "hint": "count them",
+      "tags": ["theorem"]
+    },
+    {
+      "id": "la.trace.def",
+      "front": "Define the trace of a matrix",
+      "back": "The sum of the diagonal entries.\n\n- $\\operatorname{tr}(AB) = \\operatorname{tr}(BA)$\n- The trace equals the sum of the eigenvalues",
+      "tags": ["definition"]
+    },
+    {
+      "id": "la.basis.def",
+      "front": "What is a basis of a vector space?",
+      "back": "A linearly independent set that spans the space.\n\n- Every vector then has exactly one representation in it",
+      "tags": ["definition"]
+    },
+    {
+      "id": "la.determinant.zero",
+      "front": "What does $\\det(A) = 0$ tell you about $A$?",
+      "back": "$A$ is singular: it has no inverse, its columns are linearly dependent, and $0$ is one of its eigenvalues.",
+      "tags": ["theorem"]
+    }
   ],
   "quiz": {
+    "id": "la.ch3",
     "name": "Linear Algebra — Ch.3",
     "subject": "Mathematics",
     "questions": [
-      {"type": "mcq", "prompt": "Which is NOT a vector space axiom?", "options": ["Closure under addition", "A multiplicative inverse for every vector", "Associativity of addition", "Existence of a zero vector"], "answer": 1, "explain": "Vector spaces require additive inverses, not multiplicative ones."},
-      {"type": "cloze", "text": "rank(A) + {{nullity(A)}} = {{n|dim V}}", "explain": "The rank-nullity theorem."},
-      {"type": "short", "prompt": "Symbol conventionally used for an eigenvalue?", "answers": ["lambda", "λ"]},
-      {"type": "ordering", "prompt": "Order the steps of Gaussian elimination", "items": ["Forward elimination to row echelon form", "Back substitution", "Read off the solution"]}
+      {
+        "type": "mcq",
+        "prompt": "Which is **not** a vector space axiom?",
+        "options": [
+          "Closure under addition",
+          "A multiplicative inverse for every vector",
+          "Associativity of addition",
+          "Existence of a zero vector"
+        ],
+        "answer": 1,
+        "explain": "Vector spaces require additive inverses, not multiplicative ones — multiplication of two vectors is not even defined."
+      },
+      {
+        "type": "mcq",
+        "prompt": "An $n \\times n$ matrix has $n$ distinct eigenvalues. What follows?",
+        "options": [
+          "It is diagonalisable",
+          "It is invertible",
+          "It is symmetric",
+          "Its trace is zero"
+        ],
+        "answer": 0,
+        "explain": "Distinct eigenvalues give independent eigenvectors, hence diagonalisability. Invertibility would need every eigenvalue to be nonzero, which distinctness does not promise."
+      },
+      {
+        "type": "mcq",
+        "prompt": "What is $\\operatorname{rank}(A)$ for a $4 \\times 6$ matrix whose nullity is $4$?",
+        "options": ["0", "2", "4", "6"],
+        "answer": 1,
+        "explain": "Rank-nullity counts columns: $\\operatorname{rank} + 4 = 6$. Answering 2 requires using 6, not 4 — the row count is a distractor."
+      },
+      {
+        "type": "mcq",
+        "prompt": "Which statement about $\\det(A) = 0$ is false?",
+        "options": [
+          "The columns of $A$ are dependent",
+          "$A$ has no inverse",
+          "$A$ has a zero eigenvalue",
+          "$A$ must be the zero matrix"
+        ],
+        "answer": 3,
+        "explain": "A singular matrix need not be zero — any matrix with two equal columns is a counterexample."
+      },
+      {
+        "type": "cloze",
+        "text": "$\\operatorname{rank}(A) + {{nullity(A)}} = {{n|the number of columns}}$",
+        "explain": "The rank-nullity theorem, counted over the columns."
+      },
+      {
+        "type": "cloze",
+        "text": "A basis is a set that is {{linearly independent}} and {{spans|spanning}} the space.",
+        "explain": "Drop either half and it is no longer a basis."
+      },
+      {
+        "type": "short",
+        "prompt": "Which symbol conventionally denotes an eigenvalue?",
+        "answers": ["lambda", "λ", "\\lambda"],
+        "match": "loose"
+      },
+      {
+        "type": "short",
+        "prompt": "What is the trace of the $3 \\times 3$ identity matrix?",
+        "answers": ["3", "three"],
+        "match": "loose"
+      },
+      {
+        "type": "ordering",
+        "prompt": "Order the steps for diagonalising a matrix",
+        "items": [
+          "Solve $\\det(A - \\lambda I) = 0$ for the eigenvalues",
+          "Find an eigenvector for each eigenvalue",
+          "Assemble the eigenvectors into $P$",
+          "Read off $D = P^{-1}AP$"
+        ]
+      }
     ]
   }
 }

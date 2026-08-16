@@ -12,6 +12,10 @@ the app schedules this material for months, so a sloppy card is a sloppy month.
 Read `docs/SCHEMA.md` in the repository for the format's mechanics. This skill
 covers what goes *in* the fields.
 
+**Nothing leaves this skill unvalidated.** `scripts/validate_cards.py` enforces
+every rule below that a machine can check. Write your JSON to a file, run it,
+fix what it reports, and repeat until it is clean — see *Validate* at the end.
+
 ## Before writing anything
 
 Settle three things. Ask only if you cannot infer them:
@@ -23,9 +27,13 @@ Settle three things. Ask only if you cannot infer them:
 3. **Scope and size** — one chapter, one lecture, one syllabus section. If the
    source is bigger than that, split it and say which part you are doing.
 
-Then write the JSON. One fenced ```json block, nothing wrapped around it, no
+Then write the JSON **to a file**, validate it, and only paste the validated
+content into your reply — one fenced ```json block, nothing wrapped around it, no
 commentary between objects. A sentence before the block naming the deck and the
 count is fine; an essay is not.
+
+Writing straight into the reply is how invalid JSON reaches the user. Write the
+file first.
 
 ---
 
@@ -246,21 +254,64 @@ card's schedule, so it is for *checking* a chapter, not for memorising it.
 
 ---
 
-## Before you output — check every one of these
+## Validate — not optional
 
-1. Does every card have `id`, `front`, `back`?
-2. Is every backslash in maths doubled for JSON?
-3. Is the JSON valid — no trailing commas, no comments in the real output?
-4. Does any `back` exceed ~50 words or contain two independent facts?
-5. Is any `front` unanswerable out of context?
-6. Are all `tags` from the controlled list?
-7. In MCQs: four options, varied answer index, `explain` present, every
-   distractor wrong for a nameable reason?
-8. Does the deck path reuse an existing subject with its exact spelling?
+```bash
+python3 scripts/validate_cards.py cards.json --strict
+```
+
+Paths are relative to this skill's directory. Exit code 0 means clean; 1 means
+something to fix. Read stdin with `-` if you prefer not to keep a file around.
+
+It reports two levels:
+
+- **ERROR** — the app would refuse the entry, or would silently do the wrong
+  thing (a duplicate `id` overwrites an existing card). Never hand over output
+  with an error outstanding.
+- **warning** — accepted by the app, but it breaks a rule above: a 70-word back,
+  an invented tag, a hint that leaks its answer, an mcq whose every answer sits
+  at the same index. Fix these too; `--strict` makes them fail the run.
+
+Loop until it prints `OK`. If it reports something you believe is a false
+positive, say so explicitly in your reply rather than quietly ignoring it.
+
+### The three failures it exists to catch
+
+**A single backslash.** `"$Av = \lambda v$"` is not valid JSON — `\l` is not an
+escape sequence, and the whole payload fails to parse. Every backslash in maths
+must be doubled: `"$Av = \\lambda v$"`. This is the most common failure by a
+wide margin.
+
+**Comments.** The examples in this file annotate with `//` for readability.
+JSON has no comments. Real output must contain none.
+
+**Trailing commas.** Valid in JavaScript, invalid in JSON.
+
+### If Python is unavailable
+
+Fall back to checking by hand: valid JSON (no comments, no trailing commas,
+doubled backslashes) · every card has `id`, `front`, `back`, and a deck · no
+`back` over ~50 words or holding two independent facts · no `front` that is
+unanswerable out of context · tags from the controlled list · mcqs with four
+options, a varied answer index, `explain` present, and distractors that are
+wrong for a nameable reason. Say in your reply that you could not run the
+validator.
+
+### What it cannot check
+
+Judgement stays yours: whether a distractor is *plausibly* wrong rather than
+merely present, whether a card is worth making at all, and whether the deck path
+reuses an existing subject with its exact spelling. Look at the deck list before
+you invent a subject.
 
 ---
 
 ## Shape of a finished answer
+
+Two complete, validated examples live in `samples/` at the repository root —
+`mathematics-linear-algebra.json` and `computer-science-networks.json`. Both pass
+`--strict`, and the test suite keeps them that way. Read one before writing your
+first batch.
 
 > 24 cards for `Mathematics::Linear Algebra`, covering eigenvalues through
 > diagonalisation.

@@ -2,26 +2,41 @@
   "deck": "Computer Science::Networks",
   "cards": [
     {
-      "id": "net.tcp.handshake",
+      "id": "net.tcp.handshake-why-three",
       "front": "Why is the TCP handshake three steps rather than two?",
-      "back": "Two steps cannot confirm the client's *receive* capability, and a delayed duplicate SYN would leave the server holding a dead connection.\n\nThree steps also synchronise sequence numbers in both directions.",
-      "tags": ["tcp", "interview"]
+      "back": "Two steps cannot confirm the client's *receive* capability, and a delayed duplicate SYN would leave the server holding a dead connection.\n\n- Three steps also synchronise sequence numbers in both directions",
+      "tags": ["exam"]
     },
     {
-      "id": "net.arp",
+      "id": "net.arp.resolves",
       "front": "What does ARP resolve?",
-      "back": "An IP address to a MAC address, on the local link only."
+      "back": "An IP address to a MAC address, on the local link only.",
+      "tags": ["definition"]
     },
     {
-      "id": "net.mtu",
-      "front": "What is the MTU, and what happens when a packet exceeds it?",
-      "back": "The largest payload a link will carry in one frame. An oversized IPv4 packet is fragmented; in IPv6 it is dropped and the sender is told via *Packet Too Big*."
+      "id": "net.mtu.oversized",
+      "front": "What happens to a packet larger than the MTU?",
+      "back": "In IPv4 it is fragmented; in IPv6 it is dropped and the sender is told via *Packet Too Big*.",
+      "hint": "the two versions differ",
+      "tags": ["pitfall"]
     },
     {
-      "id": "net.tcp.vs.udp",
-      "front": "One sentence: TCP versus UDP",
-      "back": "TCP is an ordered, reliable byte stream with congestion control; UDP is unordered, unreliable datagrams with none of it.",
-      "hint": "think about what the protocol promises"
+      "id": "net.tcp-vs-udp.guarantees",
+      "front": "TCP vs UDP: what does each guarantee?",
+      "back": "TCP guarantees an ordered, reliable byte stream with congestion control. UDP guarantees nothing beyond a checksum.\n\n- Neither guarantees latency",
+      "tags": ["definition"]
+    },
+    {
+      "id": "net.tcp.loss-detection",
+      "front": "How does TCP detect that a segment was lost?",
+      "back": "Either the retransmission timer expires before the acknowledgement arrives, or three duplicate ACKs arrive for the preceding segment.",
+      "tags": ["procedure"]
+    },
+    {
+      "id": "net.dns.recursive-vs-iterative",
+      "front": "What distinguishes a recursive DNS query from an iterative one?",
+      "back": "In a recursive query the resolver does the chasing and returns a final answer. In an iterative one the server returns a referral and the client follows it.",
+      "tags": ["definition"]
     }
   ],
   "quiz": {
@@ -32,19 +47,51 @@
       {
         "type": "mcq",
         "prompt": "Which of these is **not** provided by TCP?",
-        "options": ["Ordered delivery", "Congestion control", "Guaranteed latency", "Retransmission of lost segments"],
+        "options": ["Ordered delivery", "Congestion control", "Guaranteed latency", "Retransmission of loss"],
         "answer": 2,
-        "explain": "TCP promises delivery, not timeliness. Nothing in TCP bounds latency."
+        "explain": "TCP promises delivery, not timeliness — nothing in it bounds latency. Congestion control is provided, by slow start and AIMD."
+      },
+      {
+        "type": "mcq",
+        "prompt": "What does a duplicate ACK tell the sender?",
+        "options": ["The receiver window is full", "A segment arrived out of order", "The connection is closing", "The checksum failed"],
+        "answer": 1,
+        "explain": "A duplicate ACK means data arrived past a gap. Three of them are read as loss, which is why fast retransmit exists."
+      },
+      {
+        "type": "mcq",
+        "prompt": "Which field lets the receiver slow a fast sender down?",
+        "options": ["Sequence number", "Receive window", "Urgent pointer", "Time to live"],
+        "answer": 1,
+        "explain": "The receive window is flow control. Congestion control is separate and lives in the sender."
+      },
+      {
+        "type": "mcq",
+        "prompt": "Why does UDP suit live video better than TCP?",
+        "options": ["It compresses the payload", "A late retransmission is worse than a dropped frame", "It encrypts by default", "It has a larger MTU"],
+        "answer": 1,
+        "explain": "Retransmitted video arrives after its moment has passed. Dropping the frame and moving on costs less than waiting."
       },
       {
         "type": "cloze",
         "text": "The TCP handshake is SYN, {{SYN-ACK|SYN ACK}}, then {{ACK}}.",
-        "explain": "Three segments, two directions of sequence-number synchronisation."
+        "explain": "Three segments, synchronising sequence numbers in both directions."
+      },
+      {
+        "type": "cloze",
+        "text": "TCP congestion control begins with {{slow start}} and then settles into {{AIMD|additive increase multiplicative decrease}}.",
+        "explain": "Exponential growth until the first loss, then the sawtooth."
       },
       {
         "type": "short",
-        "prompt": "Which layer of the OSI model does TCP sit at?",
+        "prompt": "Which OSI layer does TCP sit at?",
         "answers": ["transport", "layer 4", "4"],
+        "match": "loose"
+      },
+      {
+        "type": "short",
+        "prompt": "How many bytes is a TCP header without options?",
+        "answers": ["20", "20 bytes"],
         "match": "loose"
       },
       {
