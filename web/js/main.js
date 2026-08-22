@@ -8,13 +8,14 @@ import { registerRoutes, registerChrome, render, actions as routerActions } from
 import { renderHome, actions as homeActions } from './views/home.js';
 import { renderReview, actions as reviewActions } from './views/review.js';
 import { renderBrowse, actions as browseActions } from './views/browse.js';
-import { renderQuizList, actions as quizActions } from './views/quiz.js';
+import { renderQuizList, quizSidebar, actions as quizActions } from './views/quiz.js';
 import { renderQuizRun, actions as quizRunActions } from './views/quizrun.js';
 import { renderCards, actions as cardsActions } from './views/cards.js';
 import { renderImport, actions as importActions } from './views/import.js';
 import { renderStats, actions as statsActions } from './views/stats.js';
-import { renderSettings, actions as settingsActions } from './views/settings.js';
-import { renderSidebar, refreshDecks, actions as sidebarActions } from './views/sidebar.js';
+import { renderSettings, settingsSidebar, actions as settingsActions } from './views/settings.js';
+import { renderSidebar, refreshDecks, registerSidebarPanels,
+         actions as sidebarActions } from './views/sidebar.js';
 
 // deckScoped: the page reads S.deck, so choosing a deck re-renders it in place.
 // The others keep the sidebar for layout and navigation, and a deck click there
@@ -45,7 +46,13 @@ registerActions({
   ...settingsActions,
 });
 
-// The deck list is chrome: refreshed once per navigation, not by each view.
+// Pages whose left column is not a deck tree say what belongs there instead.
+registerSidebarPanels({
+  quiz: quizSidebar,
+  settings: settingsSidebar,
+});
+
+// The left column is chrome: refreshed once per navigation, not by each view.
 registerChrome(async () => {
   await refreshDecks();
   renderSidebar();

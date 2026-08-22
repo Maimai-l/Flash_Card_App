@@ -338,6 +338,52 @@ check('a long page scrolls the content pane instead',
 check('the sidebar stays mounted across the chrome',
   await page.evaluate(() => !document.getElementById('sidebar').hidden));
 
+// Mounted everywhere is not a licence to show the same thing everywhere.
+await page.click('.nav-link:has-text("Settings")');
+await page.waitForSelector('.setting-row');
+const settingsPanel = await page.locator('#sidebar').textContent();
+check('Settings lists its own sections, not decks',
+  settingsPanel.includes('Daily limits') && !settingsPanel.includes('All decks'));
+
+await page.click('.nav-link:has-text("Quiz")');
+await page.waitForSelector('.quiz-row-name');
+check('Quiz lists subjects, not decks',
+  (await page.locator('#sidebar').textContent()).includes('All quizzes'));
+
+await page.click('.nav-link:has-text("Home")');
+await page.waitForSelector('.due-card');
+check('a deck-scoped page still lists decks',
+  (await page.locator('#sidebar').textContent()).includes('All decks'));
+check('the forecast paints a bar for a scheduled day',
+  await page.locator('.forecast-bar').count() > 0);
+
+// ── Cards: one list you keep scrolling ────────────────────────────────────
+await call('import_commit', [JSON.stringify({
+  deck: 'Computer Science::Bulk',
+  cards: Array.from({ length: 70 }, (_, i) => ({
+    id: `bulk.${i}`, front: `What is bulk term ${i}?`, back: `Answer ${i}.` })),
+})]);
+await page.click('.nav-link:has-text("Cards")');
+await page.waitForSelector('.card-table');
+// An earlier step scoped the sidebar to one chapter; the bulk deck is elsewhere.
+await page.click('.deck-item:has-text("All decks")');
+await page.waitForSelector('.card-table');
+await page.waitForTimeout(300);
+const firstPage = await page.locator('#cards-body tr').count();
+check('the first slice is one page long', firstPage === 50);
+check('there is no pager', await page.locator('.pager').count() === 0);
+for (let i = 0; i < 4; i += 1) {
+  await page.evaluate(() => {
+    const pane = document.getElementById('content');
+    pane.scrollTop = pane.scrollHeight;
+  });
+  await page.waitForTimeout(400);
+}
+const afterScroll = await page.locator('#cards-body tr').count();
+check('scrolling appends the rest', afterScroll > firstPage);
+check('the list says when it has run out',
+  (await page.locator('#cards-footer').textContent()).includes('all of them'));
+
 check('no console errors anywhere', consoleErrors.length === 0);
 
 await browser.close();

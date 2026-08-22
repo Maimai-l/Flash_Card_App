@@ -1,5 +1,10 @@
-/* The deck tree. Shown beside Home and Cards; it is the subject switcher for
-   both. Counts are rolled up from each deck's subtree. */
+/* The left column.
+
+   It stays mounted on every page so the layout never shifts, but "always
+   mounted" is not a licence to show the same thing everywhere: a deck tree
+   beside Settings tells you nothing. Each page says what belongs there — decks
+   where the page is scoped by deck, subjects on Quiz, sections on Settings — so
+   the column earns its place rather than only holding it. */
 
 import { S, savePrefs } from '../core/state.js';
 import { api } from '../core/api.js';
@@ -25,9 +30,25 @@ function isHidden(path) {
   return false;
 }
 
+/** Registered by main.js: page → what the left column shows there. */
+const panels = {};
+
+export function registerSidebarPanels(map) {
+  Object.assign(panels, map);
+}
+
 export function renderSidebar() {
   const sidebar = document.getElementById('sidebar');
   if (sidebar.hidden) return;
+  const panel = panels[S.page];
+  if (panel) {
+    sidebar.innerHTML = panel();
+    return;
+  }
+  renderDeckTree(sidebar);
+}
+
+function renderDeckTree(sidebar) {
 
   const totals = S.decks
     .filter((d) => d.depth === 0)

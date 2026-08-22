@@ -250,6 +250,41 @@ class StudyService:
             return {"ok": False, "error": "Nothing to undo"}
         return {"ok": True, "card": self._present(card)}
 
+    def forecast(self, deck_path: str = "", days: int = 7) -> dict:
+        """
+        How much is scheduled for each of the next few days.
+
+        Purely descriptive: it exists so you can see a heavy day coming and
+        decide whether to spread the backlog, not as something to hit.
+        """
+        days = max(1, min(int(days), 30))
+        window = DayWindow()
+        deck_ids = self.decks.descendant_ids(deck_path) if normalise_path(deck_path) else None
+
+        local_now = datetime.now().astimezone()
+        start_local = datetime.combine(local_now.date(), time.min, tzinfo=local_now.tzinfo)
+        end_local = start_local + timedelta(days=days)
+        raw = self.cards.due_dates_in_window(
+            deck_ids,
+            start_local.astimezone(timezone.utc).isoformat(),
+            end_local.astimezone(timezone.utc).isoformat(),
+        )
+
+        buckets = {(start_local + timedelta(days=n)).date().isoformat(): 0 for n in range(days)}
+        for value in raw:
+            moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=timezone.utc)
+            key = moment.astimezone(local_now.tzinfo).date().isoformat()
+            if key in buckets:
+                buckets[key] += 1
+
+        overdue = self.cards.count_overdue(deck_ids, window.start_iso)
+        return {
+            "days": [{"day": day, "count": count} for day, count in sorted(buckets.items())],
+            "overdue": overdue,
+        }
+
     # ── Backlog relief ────────────────────────────────────────────────────
 
     def spread_overdue(self, deck_path: str = "", days: int = 7) -> dict:

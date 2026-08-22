@@ -70,6 +70,11 @@ in [samples/](samples/).
 
 ## Window layout
 
+The left column is mounted on every page so nothing shifts as you navigate, and
+each page decides what belongs in it: decks where the page is scoped by deck,
+subjects on Quiz, its own sections on Settings.
+
+
 The document never scrolls. The shell is exactly the viewport height, the top bar
 and deck sidebar sit outside the scroll container, and only the content pane
 scrolls — so a scrollbar appearing on a long page cannot move any control. The

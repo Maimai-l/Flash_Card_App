@@ -6,6 +6,26 @@ import { $content, esc, attr, showToast, confirmDialog } from '../core/dom.js';
 import { t, LANGUAGES } from '../core/i18n.js';
 import { render } from '../core/router.js';
 
+const SECTIONS = [
+  { id: 'language', key: 'language' },
+  { id: 'limits', key: 'daily_limits' },
+  { id: 'subjects', key: 'per_deck_limits' },
+  { id: 'data', key: 'data' },
+];
+
+/** Left column on Settings: its own sections, not a deck tree. */
+export function settingsSidebar() {
+  return `
+    <div class="section-label" style="padding:0 10px">
+      <span class="grow">${esc(t('settings_title'))}</span>
+    </div>
+    ${SECTIONS.map((section) => `
+      <div class="deck-item" data-action="scrollToSection" data-section="${section.id}">
+        <span class="deck-twisty leaf"></span>
+        <span class="deck-name">${esc(t(section.key))}</span>
+      </div>`).join('')}`;
+}
+
 export async function renderSettings() {
   const settings = await api.get_settings();
   S.settings = settings.error ? S.settings : settings;
@@ -17,7 +37,7 @@ export async function renderSettings() {
       <div class="page-head"><h1>${esc(t('settings_title'))}</h1></div>
 
       <div class="narrow">
-      <div class="section-label">${esc(t('language'))}</div>
+      <div class="section-label" id="section-language">${esc(t('language'))}</div>
       <div class="list mb24">
         <div class="setting-row">
           <div class="setting-main"><div class="setting-name">${esc(t('language'))}</div></div>
@@ -28,7 +48,7 @@ export async function renderSettings() {
         </div>
       </div>
 
-      <div class="section-label">${esc(t('daily_limits'))}</div>
+      <div class="section-label" id="section-limits">${esc(t('daily_limits'))}</div>
       <div class="list">
         <div class="setting-row">
           <div class="setting-main">
@@ -50,7 +70,7 @@ export async function renderSettings() {
       </div>
 
       ${subjects.length ? `
-        <div class="section-label mt24">${esc(t('per_deck_limits'))}</div>
+        <div class="section-label mt24" id="section-subjects">${esc(t('per_deck_limits'))}</div>
         <div class="list">
           ${subjects.map((deck) => `
             <div class="setting-row">
@@ -74,7 +94,7 @@ export async function renderSettings() {
         </div>
         <div class="sub small mt8">${esc(t('per_deck_desc'))}</div>` : ''}
 
-      <div class="section-label mt24">${esc(t('data'))}</div>
+      <div class="section-label mt24" id="section-data">${esc(t('data'))}</div>
       <div class="list mb24">
         <div class="setting-row">
           <div class="setting-main">
@@ -91,6 +111,11 @@ export async function renderSettings() {
 }
 
 export const actions = {
+  scrollToSection: (el) => {
+    const target = document.getElementById(`section-${el.dataset.section}`);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+
   setLanguage: async (el) => {
     S.lang = el.value;
     savePrefs();

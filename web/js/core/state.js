@@ -29,6 +29,8 @@ export const S = {
   quizStart: null,
   cardsView: null,
   importView: null,
+  quizSubjects: [],
+  quizSubject: null,
 };
 
 export function savePrefs() {

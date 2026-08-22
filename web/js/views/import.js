@@ -73,12 +73,15 @@ export async function renderImport() {
     <div class="page">
       <div class="page-head">
         <h1>${esc(t('import_title'))}</h1>
-        <span class="grow"></span>
-        <button class="btn btn-secondary btn-sm" data-action="copySchema">${esc(t('copy_schema'))}</button>
       </div>
 
-      <div class="narrow">
+      <div class="import-grid">
+      <div class="import-input">
       <div class="field">
+        <div class="row" style="justify-content:flex-end;margin-bottom:6px">
+          <button class="btn btn-secondary btn-sm"
+                  data-action="copySchema">${esc(t('copy_schema'))}</button>
+        </div>
         <label class="field-label">${esc(t('paste_json'))}</label>
         <textarea class="textarea code" id="import-text" data-input="importText"
                   style="min-height:280px" spellcheck="false"
@@ -98,8 +101,33 @@ export async function renderImport() {
         <button class="btn btn-secondary" data-action="previewImport">${esc(t('validate'))}</button>
       </div>
 
-      <div id="import-result">${view.preview ? previewHtml(view.preview) : ''}</div>
       </div>
+
+      <div class="import-side" id="import-result">
+        ${view.preview ? previewHtml(view.preview) : emptyPreviewHtml()}
+      </div>
+      </div>
+    </div>`;
+}
+
+/* The panel beside the paste box is not empty before you validate — it says what
+   the box expects, which is the thing you need while filling it in. */
+function emptyPreviewHtml() {
+  return `
+    <div class="card card-pad">
+      <div class="section-label">${esc(t('what_goes_here'))}</div>
+      <div class="sub" style="font-size:13px;line-height:1.7">
+        ${esc(t('import_hint_body'))}
+      </div>
+      <pre class="import-shape">{
+  "deck": "Computer Science::Networks",
+  "cards": [
+    { "id": "net.arp",
+      "front": "What does ARP resolve?",
+      "back": "An IP address to a MAC address." }
+  ]
+}</pre>
+      <div class="sub small mt8">${esc(t('import_hint_quiz'))}</div>
     </div>`;
 }
 

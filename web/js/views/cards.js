@@ -10,21 +10,93 @@ import { render } from '../core/router.js';
 const PAGE_SIZE = 50;
 
 function view() {
-  if (!S.cardsView) S.cardsView = { search: '', offset: 0, selected: new Set() };
+  if (!S.cardsView) {
+    S.cardsView = { search: '', selected: new Set(), rows: [], total: 0, loading: false };
+  }
   return S.cardsView;
 }
 
-export async function renderCards() {
+/* Rows accumulate as you scroll rather than paging.
+
+   Paging made you hunt for a card by guessing which page it was on; a list you
+   keep scrolling is how every card library works. The observer watches a
+   sentinel below the table and asks for the next slice when it comes into view,
+   with #content as the root because the pane scrolls, not the document. */
+let observer = null;
+
+function watchForMore() {
+  if (observer) observer.disconnect();
+  const sentinel = document.getElementById('cards-sentinel');
+  if (!sentinel) return;
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) loadMore();
+  }, { root: $content(), rootMargin: '400px' });
+  observer.observe(sentinel);
+}
+
+async function loadMore() {
   const state = view();
+  if (state.loading || state.rows.length >= state.total) return;
+  state.loading = true;
+  const result = await api.list_cards(S.deck, state.search, state.rows.length, PAGE_SIZE);
+  state.loading = false;
+  if (result.error) return showToast(result.error, 3200);
 
-  const result = await api.list_cards(S.deck, state.search, state.offset, PAGE_SIZE);
-  if (result.error) {
-    $content().innerHTML = `<div class="page"><div class="empty">${esc(result.error)}</div></div>`;
-    return;
+  // A search or deck change while the request was in flight invalidates it.
+  const seen = new Set(state.rows.map((row) => row.card_id));
+  state.rows.push(...result.cards.filter((card) => !seen.has(card.card_id)));
+  state.total = result.total;
+  paintRows();
+}
+
+function paintRows() {
+  const state = view();
+  const body = document.getElementById('cards-body');
+  if (!body) return;
+  body.innerHTML = state.rows.map(rowHtml).join('');
+  const footer = document.getElementById('cards-footer');
+  if (footer) {
+    footer.textContent = state.rows.length >= state.total
+      ? (state.total ? t('all_loaded') : '')
+      : t('load_more');
   }
+  watchForMore();
+}
 
+function toolbarHtml() {
+  const state = view();
   const selectedCount = state.selected.size;
-  const rows = result.cards.map((card) => `
+  return `
+    <input class="input" style="max-width:260px" id="card-search" data-input="searchCards"
+           placeholder="${attr(t('search'))}" value="${attr(state.search)}">
+    <span class="grow"></span>
+    ${selectedCount ? `
+      <span class="sub small">${esc(t('selected_n', { n: selectedCount }))}</span>
+      <button class="btn btn-secondary btn-sm" data-action="moveSelected">${esc(t('move_to'))}</button>
+      <button class="btn btn-secondary btn-sm" data-action="suspendSelected">${esc(t('suspend'))}</button>
+      <button class="btn btn-danger btn-sm" data-action="deleteSelected">${esc(t('delete'))}</button>
+    ` : `
+      <button class="btn btn-secondary btn-sm" data-action="exportDeck">${esc(t('export_cards'))}</button>
+      <button class="btn btn-primary btn-sm" data-action="newCard">${esc(t('new_card'))}</button>
+    `}`;
+}
+
+function renderToolbar() {
+  const toolbar = document.getElementById('cards-toolbar');
+  if (!toolbar) return;
+  const search = document.getElementById('card-search');
+  const caret = search ? search.selectionStart : null;
+  toolbar.innerHTML = toolbarHtml();
+  if (caret !== null) {
+    const next = document.getElementById('card-search');
+    next.focus();
+    next.setSelectionRange(caret, caret);
+  }
+}
+
+function rowHtml(card) {
+  const state = view();
+  return `
     <tr class="${state.selected.has(card.card_id) ? 'selected' : ''}">
       <td style="width:26px">
         <input type="checkbox" data-change="toggleCardSelect" data-id="${card.card_id}"
@@ -37,10 +109,19 @@ export async function renderCards() {
       <td style="width:52px" class="nowrap">
         <button class="btn-text" data-action="editCardRow" data-id="${card.card_id}">${esc(t('edit'))}</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+}
 
-  const from = result.total ? state.offset + 1 : 0;
-  const to = Math.min(state.offset + PAGE_SIZE, result.total);
+export async function renderCards() {
+  const state = view();
+
+  const result = await api.list_cards(S.deck, state.search, 0, PAGE_SIZE);
+  if (result.error) {
+    $content().innerHTML = `<div class="page"><div class="empty">${esc(result.error)}</div></div>`;
+    return;
+  }
+  state.rows = result.cards;
+  state.total = result.total;
 
   $content().innerHTML = `
     <div class="page">
@@ -49,41 +130,24 @@ export async function renderCards() {
         <span class="sub small">${result.total} ${esc(t(result.total === 1 ? 'card' : 'cards'))}</span>
       </div>
 
-      <div class="table-toolbar">
-        <input class="input" style="max-width:260px" id="card-search" data-input="searchCards"
-               placeholder="${attr(t('search'))}" value="${attr(state.search)}">
-        <span class="grow"></span>
-        ${selectedCount ? `
-          <span class="sub small">${esc(t('selected_n', { n: selectedCount }))}</span>
-          <button class="btn btn-secondary btn-sm" data-action="moveSelected">${esc(t('move_to'))}</button>
-          <button class="btn btn-secondary btn-sm" data-action="suspendSelected">${esc(t('suspend'))}</button>
-          <button class="btn btn-danger btn-sm" data-action="deleteSelected">${esc(t('delete'))}</button>
-        ` : `
-          <button class="btn btn-secondary btn-sm" data-action="exportDeck">${esc(t('export_cards'))}</button>
-          <button class="btn btn-primary btn-sm" data-action="newCard">${esc(t('new_card'))}</button>
-        `}
-      </div>
+      <div class="table-toolbar" id="cards-toolbar">${toolbarHtml()}</div>
 
-      ${result.cards.length ? `
+      ${state.rows.length ? `
         <div class="card" style="padding:14px 8px 8px">
           <table class="card-table">
             <thead><tr>
               <th></th><th>${esc(t('front'))}</th><th>${esc(t('back'))}</th>
               <th>${esc(t('deck'))}</th><th></th><th></th>
             </tr></thead>
-            <tbody>${rows}</tbody>
+            <tbody id="cards-body"></tbody>
           </table>
         </div>
-        ${result.total > PAGE_SIZE ? `
-          <div class="pager">
-            <button class="btn btn-secondary btn-sm" data-action="pageCards" data-dir="-1"
-                    ${state.offset === 0 ? 'disabled' : ''}>${esc(t('prev'))}</button>
-            <span class="num">${esc(t('showing_range', { from, to, total: result.total }))}</span>
-            <button class="btn btn-secondary btn-sm" data-action="pageCards" data-dir="1"
-                    ${to >= result.total ? 'disabled' : ''}>${esc(t('next'))}</button>
-          </div>` : ''}
+        <div class="list-end" id="cards-footer"></div>
+        <div id="cards-sentinel" aria-hidden="true"></div>
       ` : `<div class="card"><div class="empty">${esc(t('no_cards_found'))}</div></div>`}
     </div>`;
+
+  paintRows();
 
   const search = document.getElementById('card-search');
   if (search && state.focusSearch) {
@@ -164,24 +228,18 @@ export const actions = {
   searchCards: (el) => {
     const state = view();
     state.search = el.value;
-    state.offset = 0;
+    state.rows = [];
     state.focusSearch = true;
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => render({ silent: true }), 220);
-  },
-
-  pageCards: (el) => {
-    const state = view();
-    state.offset = Math.max(0, state.offset + Number(el.dataset.dir) * PAGE_SIZE);
-    state.focusSearch = false;
-    return render({ silent: true });
   },
 
   toggleCardSelect: (el) => {
     const state = view();
     const id = Number(el.dataset.id);
     if (el.checked) state.selected.add(id); else state.selected.delete(id);
-    return render({ silent: true });
+    paintRows();               // only the rows change; do not refetch the list
+    renderToolbar();
   },
 
   newCard: () => openEditor(null),

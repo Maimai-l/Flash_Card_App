@@ -10,6 +10,7 @@ import { api } from '../core/api.js';
 import { $content, esc, attr, showToast, showModal, closeModal, confirmDialog, promptDialog } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { navigate, render } from '../core/router.js';
+import { renderSidebar } from './sidebar.js';
 
 const DOTS = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>`;
 
@@ -23,8 +24,37 @@ function relativeDay(iso) {
   return rtf.format(-days, 'day');
 }
 
+/** Left column on the Quiz page: the subjects that actually have quizzes. */
+export function quizSidebar() {
+  const subjects = new Map();
+  for (const group of S.quizSubjects || []) {
+    subjects.set(group.subject || '', (subjects.get(group.subject || '') || 0) + 1);
+  }
+  const rows = [...subjects.entries()].map(([subject, count]) => `
+    <div class="deck-item ${S.quizSubject === subject ? 'active' : ''}"
+         data-action="selectQuizSubject" data-subject="${attr(subject)}">
+      <span class="deck-twisty leaf"></span>
+      <span class="deck-name">${esc(subject || t('quizzes'))}</span>
+      <span class="deck-count">${count}</span>
+    </div>`).join('');
+
+  return `
+    <div class="section-label" style="padding:0 10px">
+      <span class="grow">${esc(t('nav_quiz'))}</span>
+    </div>
+    <div class="deck-item ${S.quizSubject === null ? 'active' : ''}"
+         data-action="selectQuizSubject" data-subject="">
+      <span class="deck-twisty leaf"></span>
+      <span class="deck-name">${esc(t('all_quizzes'))}</span>
+      <span class="deck-count">${(S.quizSubjects || []).length}</span>
+    </div>
+    ${rows}`;
+}
+
 export async function renderQuizList() {
   const groups = await api.list_quizzes();
+  S.quizSubjects = Array.isArray(groups) ? groups : [];
+  renderSidebar();
   if (groups.error) {
     $content().innerHTML = `<div class="page"><div class="empty">${esc(groups.error)}</div></div>`;
     return;
@@ -39,8 +69,12 @@ export async function renderQuizList() {
     return;
   }
 
+  const visible = S.quizSubject === null || S.quizSubject === undefined
+    ? groups
+    : groups.filter((group) => (group.subject || '') === S.quizSubject);
+
   const bySubject = new Map();
-  for (const group of groups) {
+  for (const group of visible) {
     const key = group.subject || '';
     if (!bySubject.has(key)) bySubject.set(key, []);
     bySubject.get(key).push(group);
@@ -93,6 +127,11 @@ export async function renderQuizList() {
 }
 
 export const actions = {
+  selectQuizSubject: async (el) => {
+    S.quizSubject = el.dataset.subject === '' ? null : el.dataset.subject;
+    await render();
+  },
+
   startQuiz: async (el) => {
     const groupId = Number(el.dataset.group);
     if (el.dataset.fresh) {

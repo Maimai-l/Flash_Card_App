@@ -132,6 +132,17 @@ class CardRepository(Repository):
             params + (cutoff,),
         )
 
+    def due_dates_in_window(self, deck_ids, start: str, end: str) -> list[str]:
+        """Due timestamps for scheduled cards falling inside [start, end)."""
+        where, params = _deck_filter(deck_ids)
+        rows = self._all(
+            f"SELECT due_date FROM Card WHERE {where} AND suspended = 0 "
+            "AND last_review IS NOT NULL AND due_date >= ? AND due_date < ? "
+            "ORDER BY due_date",
+            params + (start, end),
+        )
+        return [r["due_date"] for r in rows]
+
     def count_overdue(self, deck_ids, cutoff: str) -> int:
         where, params = _deck_filter(deck_ids)
         return self._scalar(
