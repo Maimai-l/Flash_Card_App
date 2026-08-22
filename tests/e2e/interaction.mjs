@@ -302,12 +302,23 @@ for (const nav of ['Home', 'Quiz', 'Cards', 'Import', 'Stats', 'Settings']) {
   await page.waitForTimeout(200);
   geometry.push(await page.evaluate((name) => {
     const h1 = document.querySelector('h1').getBoundingClientRect();
+    const content = document.getElementById('content');
+    const de = document.documentElement;
+    let node = document.getElementById('topbar').parentElement;
+    let scrollingAncestors = 0;
+    while (node) {
+      if (node.scrollHeight > node.clientHeight + 1) scrollingAncestors += 1;
+      node = node.parentElement;
+    }
     return {
       name,
       x: Math.round(h1.left),
       y: Math.round(h1.top),
-      width: Math.round(document.getElementById('content').getBoundingClientRect().width),
-      scrolls: document.documentElement.scrollHeight > document.documentElement.clientHeight,
+      width: Math.round(content.getBoundingClientRect().width),
+      topbar: Math.round(document.getElementById('topbar').getBoundingClientRect().width),
+      docScrolls: de.scrollHeight > de.clientHeight,
+      paneScrolls: content.scrollHeight > content.clientHeight,
+      scrollingAncestors,
     };
   }, nav));
 }
@@ -315,8 +326,15 @@ const distinct = (key) => new Set(geometry.map((g) => g[key]));
 check('every page puts its heading at the same x', distinct('x').size === 1);
 check('every page puts its heading at the same y', distinct('y').size === 1);
 check('every page has the same content width', distinct('width').size === 1);
-check('a page long enough to scroll is no narrower',
-  distinct('scrolls').size === 2 && distinct('width').size === 1);
+check('the top bar is the same width on every page', distinct('topbar').size === 1);
+// The chrome cannot be pushed by a scrollbar it does not live inside. Checking
+// the structure rather than the pixels, because whether a scrollbar takes
+// layout space depends on the platform and cannot be reproduced headless.
+check('the document never scrolls', [...distinct('docScrolls')].every((v) => v === false));
+check('the top bar has no scrolling ancestor',
+  [...distinct('scrollingAncestors')].every((v) => v === 0));
+check('a long page scrolls the content pane instead',
+  geometry.some((g) => g.paneScrolls) && distinct('width').size === 1);
 check('the sidebar stays mounted across the chrome',
   await page.evaluate(() => !document.getElementById('sidebar').hidden));
 

@@ -41,11 +41,7 @@
   --shadow-pop:  0 12px 40px rgba(0, 0, 0, .16);
 }
 
-html, body { height: 100%; }
-
-/* Reserve the scrollbar track whether or not the page scrolls, so moving from a
-   short page to a long one does not shift every control sideways. */
-html { scrollbar-gutter: stable; }
+html, body { height: 100%; overflow: hidden; }
 
 body {
   font-family: var(--font-ui);
@@ -61,8 +57,22 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 button { cursor: pointer; }
 a { color: var(--blue); text-decoration: none; }
 
-/* ── Shell ──────────────────────────────────────────────────────────────── */
-#app { display: flex; flex-direction: column; min-height: 100vh; }
+/* ── Shell ──────────────────────────────────────────────────────────────────
+   The document itself never scrolls. The shell is exactly the viewport, and the
+   only thing that scrolls is the content pane, so the top bar and the sidebar
+   sit outside the scroll container and cannot be moved by a scrollbar appearing.
+
+   Reserving the gutter at the root was not enough on its own: a scrollbar next
+   to the chrome still changes what the chrome is measured against, and on macOS
+   styling ::-webkit-scrollbar turns the overlay bar into one that takes layout
+   space. Taking the scroll off the document removes the question entirely. */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;   /* mobile browsers, where 100vh includes retracting chrome */
+  overflow: hidden;
+}
 
 #topbar[hidden] { display: none; }
 #topbar {
@@ -109,7 +119,16 @@ a { color: var(--blue); text-decoration: none; }
 }
 #sidebar[hidden] { display: none; }
 
-#content { flex: 1; min-width: 0; padding: 28px 32px 64px; animation: settle .22s ease-out; }
+#content {
+  flex: 1;
+  min-width: 0;
+  padding: 28px 32px 64px;
+  overflow-y: auto;
+  /* The pane keeps its own track reserved, so its contents do not shift either
+     when a long list makes it scrollable. */
+  scrollbar-gutter: stable;
+  animation: settle .22s ease-out;
+}
 @keyframes settle {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: none; }
@@ -120,7 +139,7 @@ a { color: var(--blue); text-decoration: none; }
     transition-duration: .01ms !important;
   }
 }
-#content.full { padding: 0; height: 100vh; overflow: hidden; }
+#content.full { padding: 0; height: 100%; overflow: hidden; scrollbar-gutter: auto; }
 
 /* One container width for every page in the app chrome. Two widths meant the
    heading moved when you switched pages; content that wants to be narrower

@@ -32,7 +32,7 @@ export async function navigate(page, params = {}) {
   S.page = page;
   closeModal();
   savePrefs();
-  window.scrollTo(0, 0);
+  $content().scrollTop = 0;   // the pane scrolls, not the document
   await render();
 }
 

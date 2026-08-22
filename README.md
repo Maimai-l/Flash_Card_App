@@ -68,6 +68,13 @@ entries rather than rejecting the whole paste.
 The format is documented in [docs/SCHEMA.md](docs/SCHEMA.md). Sample files live
 in [samples/](samples/).
 
+## Window layout
+
+The document never scrolls. The shell is exactly the viewport height, the top bar
+and deck sidebar sit outside the scroll container, and only the content pane
+scrolls — so a scrollbar appearing on a long page cannot move any control. The
+pane also reserves its own scrollbar track, so its contents stay put too.
+
 ## Keyboard
 
 | Key | Where | Does |
