@@ -36,7 +36,7 @@ export async function renderStats() {
 
   $content().innerHTML = `
     <div class="page">
-      <div class="home-head">
+      <div class="page-head">
         <h1>${esc(t('stats_title'))}</h1>
         <span class="sub small">${esc(S.deck || t('all_decks'))}</span>
       </div>

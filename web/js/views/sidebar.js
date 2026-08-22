@@ -5,7 +5,7 @@ import { S, savePrefs } from '../core/state.js';
 import { api } from '../core/api.js';
 import { esc, attr, showModal, closeModal, promptDialog, confirmDialog, showToast } from '../core/dom.js';
 import { t } from '../core/i18n.js';
-import { render } from '../core/router.js';
+import { render, navigate, currentPageIsDeckScoped } from '../core/router.js';
 
 const CHEVRON = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
   stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
@@ -76,7 +76,9 @@ export const actions = {
   selectDeck: async (el) => {
     S.deck = el.dataset.deck;
     savePrefs();
-    await render();
+    // On a page that ignores the deck, picking one is a navigation gesture.
+    if (currentPageIsDeckScoped()) await render();
+    else await navigate('home');
   },
 
   toggleDeck: (el, event) => {

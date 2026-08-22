@@ -1,6 +1,12 @@
 /* ── Home ───────────────────────────────────────────────────────────────── */
-.home-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 22px; }
-.home-head h1 { line-height: 1.2; }
+.page-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 34px;      /* fixed, so a header with a button does not push content down */
+  margin-bottom: 22px;
+}
+.page-head h1 { line-height: 1.2; }
 
 /* Two columns on a wide window: the due card carries the actions, the heatmap
    fills the space that used to sit empty beside it. */

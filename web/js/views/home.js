@@ -8,14 +8,10 @@ import { api } from '../core/api.js';
 import { $content, esc, attr, showModal, closeModal, showToast } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { navigate, render } from '../core/router.js';
-import { renderSidebar, refreshDecks } from './sidebar.js';
 
 const WEEK_ROWS = 7;
 
 export async function renderHome() {
-  await refreshDecks();
-  renderSidebar();
-
   const [overview, heat] = await Promise.all([
     api.get_overview(S.deck),
     api.get_heatmap(S.deck, 182),
@@ -45,8 +41,8 @@ export async function renderHome() {
     : (overview.new_done + overview.review_done > 0 ? t('caught_up') : t('nothing_due'));
 
   $content().innerHTML = `
-    <div class="page-wide">
-      <div class="home-head">
+    <div class="page">
+      <div class="page-head">
         <h1>${esc(title)}</h1>
         <span class="sub small">${overview.total_cards} ${esc(t(overview.total_cards === 1 ? 'card' : 'cards'))}</span>
       </div>

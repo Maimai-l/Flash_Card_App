@@ -43,6 +43,10 @@
 
 html, body { height: 100%; }
 
+/* Reserve the scrollbar track whether or not the page scrolls, so moving from a
+   short page to a long one does not shift every control sideways. */
+html { scrollbar-gutter: stable; }
+
 body {
   font-family: var(--font-ui);
   font-size: 14.5px;
@@ -118,8 +122,11 @@ a { color: var(--blue); text-decoration: none; }
 }
 #content.full { padding: 0; height: 100vh; overflow: hidden; }
 
-.page { max-width: 940px; margin: 0 auto; }
-.page-wide { max-width: 1180px; margin: 0 auto; }
+/* One container width for every page in the app chrome. Two widths meant the
+   heading moved when you switched pages; content that wants to be narrower
+   constrains itself with .narrow instead of shrinking the page around it. */
+.page { max-width: 1180px; margin: 0 auto; }
+.narrow { max-width: 760px; }
 .prose { max-width: var(--read-width); }
 
 /* ── Typography helpers ─────────────────────────────────────────────────── */

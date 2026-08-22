@@ -6,7 +6,6 @@ import { $content, esc, attr, showToast, showModal, closeModal, confirmDialog } 
 import { plain } from '../core/render.js';
 import { t } from '../core/i18n.js';
 import { render } from '../core/router.js';
-import { renderSidebar, refreshDecks } from './sidebar.js';
 
 const PAGE_SIZE = 50;
 
@@ -16,13 +15,11 @@ function view() {
 }
 
 export async function renderCards() {
-  await refreshDecks();
-  renderSidebar();
   const state = view();
 
   const result = await api.list_cards(S.deck, state.search, state.offset, PAGE_SIZE);
   if (result.error) {
-    $content().innerHTML = `<div class="page-wide"><div class="empty">${esc(result.error)}</div></div>`;
+    $content().innerHTML = `<div class="page"><div class="empty">${esc(result.error)}</div></div>`;
     return;
   }
 
@@ -46,8 +43,8 @@ export async function renderCards() {
   const to = Math.min(state.offset + PAGE_SIZE, result.total);
 
   $content().innerHTML = `
-    <div class="page-wide">
-      <div class="home-head">
+    <div class="page">
+      <div class="page-head">
         <h1>${esc(S.deck ? S.deck.split('::').pop() : t('all_decks'))}</h1>
         <span class="sub small">${result.total} ${esc(t(result.total === 1 ? 'card' : 'cards'))}</span>
       </div>

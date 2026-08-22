@@ -291,6 +291,35 @@ await page.keyboard.press('Escape');
 await page.waitForSelector('.due-card');
 check('browsing changes nothing', JSON.stringify(await call('get_overview', [''])) === beforeBrowse);
 
+// ── Chrome alignment ──────────────────────────────────────────────────────
+// Controls used to move sideways as you navigated: the sidebar appeared beside
+// only two of six pages, the container had two different widths, and the
+// scrollbar took space only on pages long enough to scroll.
+const geometry = [];
+for (const nav of ['Home', 'Quiz', 'Cards', 'Import', 'Stats', 'Settings']) {
+  await page.click(`.nav-link:has-text("${nav}")`);
+  await page.waitForSelector('h1');
+  await page.waitForTimeout(200);
+  geometry.push(await page.evaluate((name) => {
+    const h1 = document.querySelector('h1').getBoundingClientRect();
+    return {
+      name,
+      x: Math.round(h1.left),
+      y: Math.round(h1.top),
+      width: Math.round(document.getElementById('content').getBoundingClientRect().width),
+      scrolls: document.documentElement.scrollHeight > document.documentElement.clientHeight,
+    };
+  }, nav));
+}
+const distinct = (key) => new Set(geometry.map((g) => g[key]));
+check('every page puts its heading at the same x', distinct('x').size === 1);
+check('every page puts its heading at the same y', distinct('y').size === 1);
+check('every page has the same content width', distinct('width').size === 1);
+check('a page long enough to scroll is no narrower',
+  distinct('scrolls').size === 2 && distinct('width').size === 1);
+check('the sidebar stays mounted across the chrome',
+  await page.evaluate(() => !document.getElementById('sidebar').hidden));
+
 check('no console errors anywhere', consoleErrors.length === 0);
 
 await browser.close();

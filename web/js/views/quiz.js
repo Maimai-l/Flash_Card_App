@@ -33,7 +33,7 @@ export async function renderQuizList() {
   if (!groups.length) {
     $content().innerHTML = `
       <div class="page">
-        <div class="home-head"><h1>${esc(t('quizzes'))}</h1></div>
+        <div class="page-head"><h1>${esc(t('quizzes'))}</h1></div>
         <div class="card"><div class="empty">${esc(t('no_quizzes'))}</div></div>
       </div>`;
     return;
@@ -87,8 +87,8 @@ export async function renderQuizList() {
 
   $content().innerHTML = `
     <div class="page">
-      <div class="home-head"><h1>${esc(t('quizzes'))}</h1></div>
-      ${sections}
+      <div class="page-head"><h1>${esc(t('quizzes'))}</h1></div>
+      <div class="narrow">${sections}</div>
     </div>`;
 }
 

@@ -71,12 +71,13 @@ export async function renderImport() {
 
   $content().innerHTML = `
     <div class="page">
-      <div class="home-head">
+      <div class="page-head">
         <h1>${esc(t('import_title'))}</h1>
         <span class="grow"></span>
         <button class="btn btn-secondary btn-sm" data-action="copySchema">${esc(t('copy_schema'))}</button>
       </div>
 
+      <div class="narrow">
       <div class="field">
         <label class="field-label">${esc(t('paste_json'))}</label>
         <textarea class="textarea code" id="import-text" data-input="importText"
@@ -98,6 +99,7 @@ export async function renderImport() {
       </div>
 
       <div id="import-result">${view.preview ? previewHtml(view.preview) : ''}</div>
+      </div>
     </div>`;
 }
 

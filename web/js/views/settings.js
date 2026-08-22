@@ -5,10 +5,8 @@ import { api } from '../core/api.js';
 import { $content, esc, attr, showToast, confirmDialog } from '../core/dom.js';
 import { t, LANGUAGES } from '../core/i18n.js';
 import { render } from '../core/router.js';
-import { refreshDecks } from './sidebar.js';
 
 export async function renderSettings() {
-  await refreshDecks();
   const settings = await api.get_settings();
   S.settings = settings.error ? S.settings : settings;
 
@@ -16,8 +14,9 @@ export async function renderSettings() {
 
   $content().innerHTML = `
     <div class="page">
-      <div class="home-head"><h1>${esc(t('settings_title'))}</h1></div>
+      <div class="page-head"><h1>${esc(t('settings_title'))}</h1></div>
 
+      <div class="narrow">
       <div class="section-label">${esc(t('language'))}</div>
       <div class="list mb24">
         <div class="setting-row">
@@ -87,6 +86,7 @@ export async function renderSettings() {
       </div>
 
       <div class="sub small">${esc(t('version'))} ${esc(S.version)}</div>
+      </div>
     </div>`;
 }
 
