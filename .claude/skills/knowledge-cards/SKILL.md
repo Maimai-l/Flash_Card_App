@@ -63,13 +63,29 @@ material itself is Chinese-language content.
 
 ## The output contract
 
-1. Write the JSON **to a file** in a writable location (`/tmp/cards.json`).
-2. Run the validator over it until it prints `OK` (see *Validate*).
-3. Paste the validated content into your reply as one fenced json block.
+**The deliverable is a file. Never paste the JSON into your reply.**
 
-Writing JSON straight into the reply is how invalid JSON reaches the user. Write
-the file first. A sentence before the block naming the deck and the count is
-fine; an essay is not.
+1. Write the JSON to a file named after the deck — `/tmp/9618-data-representation.json`
+   or the working directory if you have one.
+2. Run the validator over it until it prints `OK` (see *Validate*).
+3. Hand the file over. Use whatever file-delivery tool the environment offers
+   (`SendUserFile`, `present_files`); if there is none, give the absolute path.
+4. In your reply write only: the deck, how many cards and questions, anything you
+   triaged into *neither* and why, and any warning you deliberately kept.
+
+Three reasons the file is the deliverable, not a code block:
+
+- A 90-card object is thousands of tokens of JSON the user has to scroll past and
+  then select by hand. The Import page wants the whole content; a file gives them
+  that in one action.
+- The validated bytes are the ones on disk. Retyping them into a reply puts an
+  unvalidated copy in front of the user, which is the failure the validator
+  exists to prevent.
+- Chat rendering mangles long JSON — wrapped lines, smart quotes in some clients.
+  A file is byte-exact.
+
+The only JSON that belongs in a reply is a short excerpt you are discussing, such
+as one card you want the user to look at before you write the rest.
 
 ---
 
@@ -515,10 +531,16 @@ subject with its exact spelling.
 file. Both pass `--strict`, and the repository's test suite keeps them that way.
 Read one before your first batch.
 
-A finished answer looks like this:
+A finished reply looks like this — a summary, and the file alongside it:
 
-> 24 cards for `Mathematics::Linear Algebra`, covering eigenvalues through
-> diagonalisation.
+> 24 cards for `Mathematics::Linear Algebra`, eigenvalues through
+> diagonalisation. Validator clean.
+>
+> Two things I left out: the "which method should I use here" decision table is
+> exam technique rather than recall, and the worked example on p.112 only makes
+> sense with the diagram. Both are in the reply above rather than in the deck.
+
+The file it points at contains:
 
 ```json
 {
@@ -542,4 +564,4 @@ A finished answer looks like this:
 ```
 
 If the user asked for both cards and a quiz, put `cards` and `quiz` in the same
-object rather than emitting two blocks.
+object — one import, one file.

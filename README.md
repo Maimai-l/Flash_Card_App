@@ -146,6 +146,20 @@ authoring rules. Standard library only, so it runs wherever the skill is copied.
 importer rejects, so the two cannot drift apart, and holds `samples/` to a clean
 `--strict` run.
 
+The skill hands its output over as a **file**, not as JSON pasted into the chat —
+a 90-card object is unusable as a code block, and the validated bytes are the
+ones on disk.
+
+To distribute or install it, package the folder into a `.skill` file (a zip
+variant that Claude can install directly):
+
+```bash
+python3 -m scripts.package_skill /path/to/Flash_Card_App/.claude/skills/knowledge-cards
+```
+
+Run that from the `skill-creator` skill's directory. The resulting
+`knowledge-cards.skill` is a build artifact and is not committed.
+
 The Import page's *Copy schema for LLM* button covers the mechanical format for
 one-off use without the skill.
 

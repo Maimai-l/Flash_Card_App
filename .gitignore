@@ -38,3 +38,6 @@ node_modules/
 
 # Python caches inside the skill
 .claude/skills/**/__pycache__/
+
+# Packaged skill artifacts — rebuild with the command in README
+*.skill

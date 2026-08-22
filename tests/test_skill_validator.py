@@ -398,3 +398,12 @@ def test_skill_states_that_nothing_caps_the_card_count():
     text = SKILL_MD.read_text(encoding="utf-8")
     assert "There is no card limit" in text
     assert "Which numbers are real" in text
+
+
+def test_skill_delivers_a_file_rather_than_a_pasted_code_block():
+    """A 90-card object pasted into chat is unusable, and it puts an unvalidated
+    copy in front of the user — the exact failure the validator prevents."""
+    text = SKILL_MD.read_text(encoding="utf-8")
+    assert "Never paste the JSON into your reply" in text
+    assert "The deliverable is a file" in text
+    assert "Paste the validated content into your reply" not in text
