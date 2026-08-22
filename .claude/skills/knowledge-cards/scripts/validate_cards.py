@@ -49,11 +49,14 @@ QUESTION_OPENERS = (
 )
 QUESTION_MARKS = ("?", "？")
 
-MAX_FRONT_WORDS = 20
-MAX_BACK_WORDS = 50
-MAX_HINT_WORDS = 8
-MAX_CARDS_PER_BATCH = 40
-QUIZ_SIZE_RANGE = (8, 15)
+# Thresholds below are authoring heuristics, not app limits. The app imposes no
+# card count, no quiz length and no field length; its only bound is a 32 MB
+# request body. Each number here exists to catch a card that is doing two jobs,
+# and nothing else — do not add one without a reason of that kind.
+MAX_FRONT_WORDS = 20    # a prompt needing a paragraph of setup is two cards
+MAX_BACK_WORDS = 50     # in English-word equivalents; see words()
+MAX_HINT_WORDS = 8      # longer than this and it is a second answer
+MIN_QUIZ_QUESTIONS = 3  # below this a quiz is not worth its own screen
 
 
 class Report:
@@ -317,9 +320,9 @@ def validate_quiz(group, where: str, report: Report):
     if not group.get("id"):
         report.warn(label, "no 'id' — re-importing will create a second copy")
 
-    low, high = QUIZ_SIZE_RANGE
-    if not low <= len(questions) <= high:
-        report.warn(label, f"{len(questions)} questions — aim for {low}-{high}")
+    if len(questions) < MIN_QUIZ_QUESTIONS:
+        report.warn(label, f"only {len(questions)} question(s) — fold this into an "
+                           "existing quiz rather than making it its own")
 
     kinds = []
     answer_indices = []
@@ -359,9 +362,6 @@ def validate_payload(payload, report: Report):
                 card = validate_card(entry, index, default_deck, report)
                 if card:
                     parsed.append(card)
-            if len(entries) > MAX_CARDS_PER_BATCH:
-                report.warn("cards", f"{len(entries)} cards in one paste — "
-                                     f"split into batches of {MAX_CARDS_PER_BATCH}")
 
     seen_ids: dict[str, int] = {}
     seen_fronts: dict[tuple[str, str], int] = {}

@@ -41,9 +41,8 @@ the user's deck list before inventing one.
 
 ### 3. Settle the scope
 
-One chapter, one lecture, one syllabus section. See *Scope and batching* — in
-particular, deliver the whole scope in one reply rather than stopping after a
-first instalment.
+One chapter, one lecture, one syllabus section. See *Scope* — deliver the whole of it in one
+reply rather than stopping after a first instalment.
 
 ### 4. Language
 
@@ -245,9 +244,9 @@ must be few and stable. Use the name of the course or exam, never a chapter:
 
 Rules:
 
-- Two levels by default; a third only when one module exceeds roughly 60 cards.
-  This is about organisation and has nothing to do with how many cards you send
-  in one object — see *Scope and batching*.
+- Two levels by default. Add a third only when a module has grown big enough
+  that the user would want to study its parts separately — that is a judgement
+  about their revision, not a card count.
 - Title Case. No dates, no years, no revision/notes/practice suffixes.
 - Reuse an existing subject exactly as spelled — a typo creates a second subject
   with its own daily budget.
@@ -396,7 +395,6 @@ be graded.
 A quiz is a fixed set for one sitting. It is not scheduled and does not touch any
 card's schedule, so it is for *checking* a chapter, not for memorising it.
 
-- 8–15 questions. Fewer is not worth the ceremony; more is a slog.
 - Mix types. An all-MCQ quiz tests recognition only.
 
 **MCQ distractors must be wrong for a nameable reason** — a real misconception,
@@ -417,18 +415,18 @@ proof steps, layer stacks. Not for ranking by size or preference, where
 
 ---
 
-## Scope and batching
+## Scope
 
-**Deliver the whole scope the user asked for, in one reply.** If they asked for a
-chapter, they get the chapter. Splitting the *output* across several JSON objects
-is a formatting decision, not permission to hand over an instalment and wait for
-a go-ahead. Only stop early if the user asked for a part, or if you genuinely
-cannot fit the rest — and then say exactly what is missing.
+**Deliver the whole scope the user asked for, in one reply and in one JSON
+object.** If they asked for a chapter, they get the chapter. Only stop early if
+the user asked for a part, or if you genuinely cannot fit the rest — and then say
+exactly what is missing.
 
-- **At most 40 cards per JSON object.** Beyond that, mistakes hide and the user
-  cannot review the paste.
-- A reply may contain several such objects, back to back. They may share the
-  same `deck`; nothing about splitting the output changes where cards land.
+There is no card limit. The app imports any number of cards in one paste, its
+preview reports problems per entry however long the list is, and the only bound
+anywhere is a 32 MB request body. Do not split output into instalments, and do
+not invent a batch size.
+
 - **Card count follows the material's term density, not a target.** A dense
   syllabus chapter — data representation, instruction sets, statistical tests —
   legitimately yields 60–90 cards. A discursive chapter yields 15–25. Neither
@@ -437,6 +435,21 @@ cannot fit the rest — and then say exactly what is missing.
   material carries. If you found fewer than asked, say so and why.
 - Order cards the way the material is taught — definitions before theorems,
   theorems before applications. New cards enter the queue in insertion order.
+
+---
+
+## Which numbers are real
+
+The app enforces almost nothing. Knowing which is which stops you treating a
+style preference as a hard stop.
+
+| | |
+|---|---|
+| **Enforced by the app** | Required fields (`front`, `back`, a deck, quiz `name` and `questions`, each question type's own keys) · `answer` in range · at least 2 options · cloze needs a blank · 32 MB request body |
+| **Enforced by this skill** | The controlled tag vocabulary · `explain` on every mcq · unknown question types are an error rather than a silent drop |
+| **Heuristics that warn, and may be overridden with a reason** | ~20-word front · ~50-word-equivalent back · 8-word hint · four mcq options · one or two cloze blanks · 3–6 ordering items · three or more questions per quiz |
+
+Nothing caps how many cards you write.
 
 ---
 
@@ -457,7 +470,9 @@ Two levels:
   with an error outstanding.
 - **warning** — accepted by the app, but it breaks a rule above: a 70-word back,
   an invented tag, a hint that leaks its answer, an mcq whose every answer sits
-  at the same index. Fix these too; `--strict` makes them fail the run.
+  at the same index. Fix these; `--strict` makes them fail the run. Where a
+  warning is a heuristic (see *Which numbers are real*) and the material genuinely
+  needs the exception, keep it and say so in your reply.
 
 Loop until it prints `OK`. If it reports something you believe is a false
 positive, say so explicitly in your reply rather than quietly ignoring it.

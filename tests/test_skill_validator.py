@@ -334,3 +334,67 @@ def test_a_chinese_hint_that_leaks_is_caught(validator):
     report = validator.Report()
     validator.validate_payload(validator.parse_json(text, report), report)
     assert any("gives the answer away" in m for _, m in report.warnings), report.warnings
+
+
+# ── Invented limits ───────────────────────────────────────────────────────
+#
+# A batch cap of 40 cards was enforced here for a while. The app has never had
+# one, so the rule only ever split a chapter into instalments for no benefit.
+# These tests keep the validator honest about what it is entitled to complain
+# about.
+
+def test_a_large_deck_in_one_object_is_not_complained_about(validator):
+    text = json.dumps({"deck": "CAIE 9618::Data Representation", "cards": [
+        {"id": f"9618.rep.card-{i}", "front": f"What is term {i}?", "back": f"Answer {i}."}
+        for i in range(90)
+    ]})
+    report = validator.Report()
+    validator.validate_payload(validator.parse_json(text, report), report)
+    assert not report.errors, report.errors
+    assert not report.warnings, report.warnings
+
+
+def test_the_app_really_does_import_ninety_cards_in_one_paste(context):
+    text = json.dumps({"deck": "CAIE 9618::Data Representation", "cards": [
+        {"id": f"9618.rep.card-{i}", "front": f"What is term {i}?", "back": f"Answer {i}."}
+        for i in range(90)
+    ]})
+    result = context.imports.commit(text)
+    assert result["ok"] and result["issues"] == []
+    assert result["cards"]["new"] == 90
+
+
+def test_a_long_quiz_is_not_complained_about(validator):
+    text = json.dumps({"quiz": {
+        "id": "q.long", "name": "Long quiz", "subject": "Computer Science",
+        "questions": [
+            {"type": "mcq", "prompt": f"Question {i}?",
+             "options": ["alpha", "bravo", "charlie", "delta"],
+             "answer": i % 4, "explain": "Because."}
+            for i in range(20)
+        ] + [
+            {"type": "short", "prompt": "Which layer?", "answers": ["transport", "4"]},
+            {"type": "cloze", "text": "SYN, {{SYN-ACK}}, then {{ACK}}."},
+            {"type": "ordering", "prompt": "Order them",
+             "items": ["First", "Second", "Third"]},
+        ],
+    }})
+    report = validator.Report()
+    validator.validate_payload(validator.parse_json(text, report), report)
+    assert not report.warnings, report.warnings
+
+
+def test_a_one_question_quiz_is_still_flagged(validator):
+    text = json.dumps({"quiz": {
+        "id": "q.tiny", "name": "Tiny", "subject": "CS",
+        "questions": [{"type": "short", "prompt": "What?", "answers": ["a", "b"]}],
+    }})
+    report = validator.Report()
+    validator.validate_payload(validator.parse_json(text, report), report)
+    assert any("fold this into an existing quiz" in m for _, m in report.warnings)
+
+
+def test_skill_states_that_nothing_caps_the_card_count():
+    text = SKILL_MD.read_text(encoding="utf-8")
+    assert "There is no card limit" in text
+    assert "Which numbers are real" in text
