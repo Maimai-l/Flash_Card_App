@@ -177,6 +177,48 @@ await page.waitForSelector('.quiz-row-name');
 check('the attempt is recorded',
   !(await page.locator('.quiz-row-meta').first().textContent()).includes('never taken'));
 
+// ── A quiz left half-finished ─────────────────────────────────────────────
+// Card reviews write on every rating; quizzes used to hold the run in the tab,
+// so one Escape threw away every answered question.
+await page.click('button:has-text("Start")');
+await page.waitForSelector('.opt');
+await page.click('.opt >> nth=0');
+await page.waitForTimeout(250);
+await page.keyboard.press('Enter');
+await page.waitForTimeout(250);
+await page.keyboard.press('Escape');
+await page.waitForSelector('.quiz-row-name');
+check('the list shows a half-finished run',
+  (await page.locator('.quiz-row-meta').first().textContent()).includes('in progress'));
+
+await page.click('button:has-text("Resume")');
+await page.waitForSelector('.q-card');
+check('resuming lands where it stopped',
+  (await page.locator('.counter').textContent()).trim().startsWith('2'));
+
+// and it is on the server, not in the tab
+await page.goto(`${BASE}/index.html`, { waitUntil: 'networkidle' });
+await page.click('.nav-link:has-text("Quiz")');
+await page.waitForSelector('.quiz-row-name');
+await page.click('button:has-text("Resume")');
+await page.waitForSelector('.q-card');
+check('the run survives a full page reload',
+  (await page.locator('.counter').textContent()).trim().startsWith('2'));
+
+await page.keyboard.press('Escape');
+await page.waitForSelector('.quiz-row-name');
+await page.click('button:has-text("Start over")');
+await page.waitForSelector('.modal');
+await page.click('.modal .btn-danger');
+await page.waitForSelector('.q-card');
+check('starting over rewinds to the first question',
+  (await page.locator('.counter').textContent()).trim().startsWith('1'));
+// Leaving a run in which nothing has been graded yet leaves nothing behind.
+await page.keyboard.press('Escape');
+await page.waitForSelector('.quiz-row-name');
+check('an untouched run does not linger in the list',
+  !(await page.locator('.quiz-row-meta').first().textContent()).includes('in progress'));
+
 // ── Cards ─────────────────────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Cards")');
 await page.waitForSelector('.card-table');

@@ -67,7 +67,9 @@ as a duplicate and skipped. Tick *Import duplicates too* to override that.
 ```
 
 Use `"quizzes": [ ... ]` to import several at once. Re-importing a quiz replaces
-its question list wholesale; past attempt scores are kept.
+its question list wholesale; past attempt scores are kept. A half-finished run of
+that quiz is discarded, because its saved answers point at questions that no
+longer exist.
 
 ### Question types
 

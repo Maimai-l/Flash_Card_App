@@ -18,7 +18,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS Deck (
@@ -93,6 +93,20 @@ CREATE TABLE IF NOT EXISTS Quiz_Attempt (
     correct     INTEGER NOT NULL,
     total       INTEGER NOT NULL,
     wrong_ids   TEXT NOT NULL DEFAULT '[]'
+);
+
+-- One in-flight run per quiz, written after every graded question so that
+-- leaving a quiz costs nothing — the same guarantee card reviews have, where
+-- each rating is a database write. Cleared when the quiz is finished or the
+-- user starts it over.
+CREATE TABLE IF NOT EXISTS Quiz_Progress (
+    group_id     INTEGER PRIMARY KEY REFERENCES Quiz_Group(group_id) ON DELETE CASCADE,
+    question_ids TEXT NOT NULL,
+    answers      TEXT NOT NULL,
+    position     INTEGER NOT NULL,
+    answered     INTEGER NOT NULL,
+    total        INTEGER NOT NULL,
+    updated_at   TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS Settings (

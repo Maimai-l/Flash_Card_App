@@ -183,8 +183,16 @@ class Api:
         return self.ctx.quiz.list_groups()
 
     @api_call
-    def start_quiz(self, group_id, question_ids=None):
-        return self.ctx.quiz.start(int(group_id), question_ids)
+    def start_quiz(self, group_id, question_ids=None, resume=False):
+        return self.ctx.quiz.start(int(group_id), question_ids, bool(resume))
+
+    @api_call
+    def save_quiz_progress(self, group_id, question_ids, answers, position):
+        return self.ctx.quiz.save_progress(int(group_id), question_ids, answers, int(position))
+
+    @api_call
+    def discard_quiz_progress(self, group_id):
+        return self.ctx.quiz.discard_progress(int(group_id))
 
     @api_call
     def finish_quiz(self, group_id, correct, total, wrong_ids=None):

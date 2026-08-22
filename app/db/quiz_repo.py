@@ -30,7 +30,9 @@ class QuizRepository(Repository):
             "     ORDER BY a.attempt_id DESC LIMIT 1) AS last_total, "
             "  (SELECT a.finished_at FROM Quiz_Attempt a WHERE a.group_id = g.group_id "
             "     ORDER BY a.attempt_id DESC LIMIT 1) AS last_taken, "
-            "  (SELECT COUNT(*) FROM Quiz_Attempt a WHERE a.group_id = g.group_id) AS attempts "
+            "  (SELECT COUNT(*) FROM Quiz_Attempt a WHERE a.group_id = g.group_id) AS attempts, "
+            "  (SELECT p.answered FROM Quiz_Progress p WHERE p.group_id = g.group_id) AS progress_answered, "
+            "  (SELECT p.total FROM Quiz_Progress p WHERE p.group_id = g.group_id) AS progress_total "
             "FROM Quiz_Group g ORDER BY g.subject, g.name"
         )
         return rows
@@ -91,6 +93,38 @@ class QuizRepository(Repository):
             body["type"] = r["type"]
             out.append(body)
         return out
+
+    # ── In-flight progress ────────────────────────────────────────────────
+
+    def save_progress(self, group_id: int, question_ids: list[int], answers: list,
+                      position: int, answered: int, updated_at: str) -> None:
+        """Overwrite the single in-flight run for this quiz."""
+        self._exec(
+            "INSERT INTO Quiz_Progress "
+            "(group_id, question_ids, answers, position, answered, total, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(group_id) DO UPDATE SET "
+            "  question_ids = excluded.question_ids, answers = excluded.answers, "
+            "  position = excluded.position, answered = excluded.answered, "
+            "  total = excluded.total, updated_at = excluded.updated_at",
+            (int(group_id), json.dumps([int(q) for q in question_ids]),
+             json.dumps(answers, ensure_ascii=False), int(position), int(answered),
+             len(question_ids), updated_at),
+        )
+
+    def get_progress(self, group_id: int) -> dict | None:
+        row = self._one("SELECT * FROM Quiz_Progress WHERE group_id = ?", (int(group_id),))
+        if not row:
+            return None
+        try:
+            row["question_ids"] = json.loads(row["question_ids"])
+            row["answers"] = json.loads(row["answers"])
+        except (ValueError, TypeError):
+            return None
+        return row
+
+    def clear_progress(self, group_id: int) -> None:
+        self._exec("DELETE FROM Quiz_Progress WHERE group_id = ?", (int(group_id),))
 
     # ── Attempts ──────────────────────────────────────────────────────────
 

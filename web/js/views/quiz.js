@@ -57,16 +57,26 @@ export async function renderQuizList() {
               <div class="quiz-row-meta">
                 ${group.question_count} ${esc(t('questions'))}
                 &nbsp;·&nbsp;
-                ${group.attempts
-                  ? esc(t('last_result', {
-                      correct: group.last_correct, total: group.last_total,
-                      when: relativeDay(group.last_taken),
-                    }))
-                  : esc(t('never_taken'))}
+                ${group.in_progress
+                  ? `<span class="badge badge-blue">${esc(t('in_progress', {
+                      done: group.progress_answered, total: group.progress_total,
+                    }))}</span>`
+                  : (group.attempts
+                    ? esc(t('last_result', {
+                        correct: group.last_correct, total: group.last_total,
+                        when: relativeDay(group.last_taken),
+                      }))
+                    : esc(t('never_taken')))}
               </div>
             </div>
+            ${group.in_progress ? `
+              <button class="btn-text" data-action="startQuiz" data-group="${group.group_id}"
+                      data-fresh="1">${esc(t('start_over'))}</button>` : ''}
             <button class="btn btn-secondary btn-sm" data-action="startQuiz"
-                    data-group="${group.group_id}">${esc(t('start'))}</button>
+                    data-group="${group.group_id}"
+                    ${group.in_progress ? 'data-resume="1"' : ''}>
+              ${esc(group.in_progress ? t('resume') : t('start'))}
+            </button>
             <button class="icon-btn" data-action="quizMenu"
                     data-group="${group.group_id}"
                     data-name="${attr(group.name)}"
@@ -85,7 +95,14 @@ export async function renderQuizList() {
 export const actions = {
   startQuiz: async (el) => {
     const groupId = Number(el.dataset.group);
-    const quiz = await api.start_quiz(groupId);
+    if (el.dataset.fresh) {
+      const ok = await confirmDialog({
+        title: t('start_over'), body: t('start_over_confirm'),
+        confirmLabel: t('start_over'), danger: true,
+      });
+      if (!ok) return;
+    }
+    const quiz = await api.start_quiz(groupId, null, Boolean(el.dataset.resume));
     if (quiz.error) return showToast(quiz.error, 3200);
     if (!quiz.questions.length) return showToast(t('no_quizzes'));
     S.quiz = null;

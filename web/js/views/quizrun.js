@@ -1,8 +1,11 @@
 /* Taking a quiz, then the results.
 
    Questions have answer keys, so there is no self-rating here — you answer, the
-   app marks it, and nothing is written to any card's schedule. The only record
-   kept is the final score. */
+   app marks it, and nothing is written to any card's schedule.
+
+   Every graded question is saved to the server before the screen moves on, so
+   leaving a quiz costs nothing and re-entering picks up where you stopped. This
+   matches how card reviews behave, where each rating is a write. */
 
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
@@ -25,22 +28,56 @@ export async function renderQuizRun() {
 }
 
 function startRun(quiz) {
+  const blank = quiz.questions.map((question) => {
+    const type = questionType(question.type);
+    return {
+      answered: false,
+      correct: false,
+      response: type ? type.initialResponse(question) : null,
+    };
+  });
+
+  // A resumed run carries its answers back from the server; a fresh one starts
+  // blank. Merge rather than trust, so a saved response for a question that has
+  // since changed shape cannot break the render.
+  const saved = quiz.resumed;
+  const states = saved
+    ? blank.map((state, index) => {
+      const stored = saved.answers[index];
+      if (!stored || !stored.answered) return state;
+      return {
+        answered: true,
+        correct: Boolean(stored.correct),
+        response: stored.response === undefined ? state.response : stored.response,
+      };
+    })
+    : blank;
+
   S.quiz = {
     groupId: quiz.group_id,
     name: quiz.name,
     subject: quiz.subject,
     questions: quiz.questions,
-    index: 0,
+    index: saved ? Math.min(saved.position, quiz.questions.length - 1) : 0,
     finished: false,
-    states: quiz.questions.map((question) => {
-      const type = questionType(question.type);
-      return {
-        answered: false,
-        correct: false,
-        response: type ? type.initialResponse(question) : null,
-      };
-    }),
+    states,
   };
+}
+
+/** Write the run to the server. Called after every grade and every advance. */
+function saveProgress() {
+  const quiz = S.quiz;
+  if (!quiz || quiz.finished) return Promise.resolve();
+  return api.save_quiz_progress(
+    quiz.groupId,
+    quiz.questions.map((question) => question.question_id),
+    quiz.states.map((state) => ({
+      answered: state.answered,
+      correct: state.correct,
+      response: state.response,
+    })),
+    quiz.index,
+  );
 }
 
 function current() {
@@ -131,6 +168,7 @@ function submitCurrent() {
   state.answered = true;
   state.correct = type.grade(question, state.response);
   paint();
+  saveProgress();
 }
 
 async function finish() {
@@ -207,6 +245,7 @@ export const actions = {
     if (S.quiz.index >= S.quiz.questions.length - 1) return finish();
     S.quiz.index += 1;
     paint();
+    saveProgress();
   },
 
   retryWrong: async () => {
@@ -218,10 +257,17 @@ export const actions = {
     if (fresh.error) return showToast(fresh.error, 3200);
     startRun(fresh);
     paint();
+    saveProgress();   // the retry is a run of its own and resumes like any other
   },
 
-  exitQuiz: () => {
+  exitQuiz: async () => {
+    // Every graded answer is already on the server; this only catches an
+    // advance that had not been flushed yet.
+    const unfinished = S.quiz && !S.quiz.finished
+      && S.quiz.states.some((state) => state.answered);
+    if (unfinished) await saveProgress();
     S.quiz = null;
+    if (unfinished) showToast(t('progress_saved'), 1800);
     navigate('quiz');
   },
 };

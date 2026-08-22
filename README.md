@@ -36,6 +36,11 @@ answer, ordering — with the answer key written into the JSON. The app marks th
 so there is no self-rating, and nothing you do in a quiz touches any card's
 schedule.
 
+Leaving either one costs nothing. Each card rating and each graded quiz question
+is written when you make it, so `Esc` mid-way loses no work: a card review simply
+leaves the rest still due, and a quiz offers *Resume* where you stopped, across
+a browser reload. *Start over* discards the run and begins again.
+
 The two never mix. That is the whole design.
 
 ## Daily limits
