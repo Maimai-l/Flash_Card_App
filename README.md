@@ -132,8 +132,9 @@ distractor rules for quiz questions. Ask Claude for cards inside this repository
 and it applies automatically; elsewhere, copy the folder into that project's
 `.claude/skills/`.
 
-It ships a validator, and the skill requires running it before handing anything
-over:
+The skill is self-contained: every field name, every rule and two worked
+examples live inside its own folder, so copying the folder is enough. It ships a
+validator and requires running it before handing anything over:
 
 ```bash
 python3 .claude/skills/knowledge-cards/scripts/validate_cards.py cards.json --strict

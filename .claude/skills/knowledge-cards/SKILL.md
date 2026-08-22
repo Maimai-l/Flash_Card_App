@@ -5,35 +5,225 @@ description: Author import JSON for the Knowledge Cards app — flashcards and q
 
 # Authoring cards for Knowledge Cards
 
-You are writing data, not prose. The output is a single JSON object the user
-pastes into the app's Import page. Everything below is a rule, not a suggestion —
-the app schedules this material for months, so a sloppy card is a sloppy month.
+You are writing data, not prose. The output is a JSON object the user pastes
+into the app's Import page. Everything below is a rule, not a suggestion — the
+app schedules this material for months, so a sloppy card is a sloppy month.
 
-Read `docs/SCHEMA.md` in the repository for the format's mechanics. This skill
-covers what goes *in* the fields.
+**This file is the whole specification.** Every key name, every accepted value,
+and every rule is defined here. Do not look for a schema document elsewhere;
+there is nothing else to read. The only other files in this skill are
+`scripts/validate_cards.py` and two validated examples in `reference/`.
 
-**Nothing leaves this skill unvalidated.** `scripts/validate_cards.py` enforces
-every rule below that a machine can check. Write your JSON to a file, run it,
-fix what it reports, and repeat until it is clean — see *Validate* at the end.
+---
 
-## Before writing anything
+## Before you write anything
 
-Settle three things. Ask only if you cannot infer them:
+### 1. Triage the material three ways
 
-1. **Deck path** — which subject and module (see *Deck naming*).
-2. **Cards, quiz, or both** — cards are for durable recall, a quiz is for
-   checking a chapter you have just finished. If the user says "make cards",
-   make cards; do not volunteer a quiz.
-3. **Scope and size** — one chapter, one lecture, one syllabus section. If the
-   source is bigger than that, split it and say which part you are doing.
+Not everything in a chapter belongs in the app. Decide per item:
 
-Then write the JSON **to a file**, validate it, and only paste the validated
-content into your reply — one fenced ```json block, nothing wrapped around it, no
-commentary between objects. A sentence before the block naming the deck and the
-count is fine; an essay is not.
+| Goes in | What it is | Test |
+|---|---|---|
+| **a card** | one fact, definition, relationship or distinction you must recall cold | Could you write the answer on a blank page from the prompt alone? |
+| **a quiz question** | something with a checkable answer that is better *chosen or produced* than recalled | Is there a definite right answer you can write down in advance? |
+| **neither** | exam technique, marking-scheme wording, "how do I decide which method to use", study strategy, anything whose answer is "it depends on the question in front of you" | If the honest answer starts "it depends", it is not data. |
 
-Writing straight into the reply is how invalid JSON reaches the user. Write the
-file first.
+The third row is the one that gets forgotten. When material fails both tests,
+**say it in your reply as ordinary prose and encode nothing**. Do not manufacture
+a card like `"front": "What is the test?"` to give it somewhere to live — that
+card is unanswerable in a shuffled deck and will waste the user's reviews for
+months.
+
+### 2. Settle the deck path
+
+See *Deck naming*. Reuse an existing subject with its exact spelling; look at
+the user's deck list before inventing one.
+
+### 3. Settle the scope
+
+One chapter, one lecture, one syllabus section. See *Scope and batching* — in
+particular, deliver the whole scope in one reply rather than stopping after a
+first instalment.
+
+### 4. Language
+
+Cards are written in **English**, with the Chinese term in parentheses the first
+time a piece of technical vocabulary appears on that card:
+
+```
+"front": "What does a cache miss (缓存未命中) cost?"
+"back":  "A fetch from the next level down..."
+```
+
+This holds regardless of what language the conversation is in. Do not switch to
+Chinese just because the user is writing in Chinese; they will ask if they want
+it. Write a card wholly in Chinese only when the user says so, or when the
+material itself is Chinese-language content.
+
+---
+
+## The output contract
+
+1. Write the JSON **to a file** in a writable location (`/tmp/cards.json`).
+2. Run the validator over it until it prints `OK` (see *Validate*).
+3. Paste the validated content into your reply as one fenced json block.
+
+Writing JSON straight into the reply is how invalid JSON reaches the user. Write
+the file first. A sentence before the block naming the deck and the count is
+fine; an essay is not.
+
+---
+
+## Complete field reference
+
+### Top level
+
+| Key | Required | Type | Meaning |
+|---|---|---|---|
+| `deck` | no | string | Default deck for every card below. A card may override it. |
+| `cards` | see note | array of **card** objects | |
+| `quiz` | see note | one **quiz** object | |
+| `quizzes` | see note | array of **quiz** objects | Several quizzes in one import. |
+
+At least one of `cards`, `quiz`, `quizzes` must be present. All three may appear
+together in a single object.
+
+### Card object
+
+| Key | Required | Type | Meaning |
+|---|---|---|---|
+| `front` | **yes** | string | The prompt: a question or an imperative. |
+| `back` | **yes** | string | The answer. |
+| `deck` | yes, here or at top level | string | `Subject::Module` |
+| `id` | strongly recommended | string | Stable slug; re-import updates instead of duplicating. |
+| `hint` | no | string | Shown only on request, before the answer. |
+| `tags` | no | array of strings | From the controlled vocabulary below. |
+
+### Quiz object
+
+| Key | Required | Type | Meaning |
+|---|---|---|---|
+| `name` | **yes** | string | Shown in the quiz list. |
+| `questions` | **yes** | array of **question** objects | Non-empty. |
+| `subject` | recommended | string | The *subject* level of the deck, so the quiz groups with its cards. |
+| `id` | recommended | string | Stable slug; re-import replaces the questions and keeps the score history. |
+
+### How they nest
+
+```jsonc
+{
+  "deck": "Computer Science::Networks",
+  "cards": [
+    { "id": "net.arp", "front": "What does ARP resolve?",
+      "back": "An IP address to a MAC address, on the local link only.",
+      "tags": ["definition"] }
+  ],
+  "quiz": {
+    "id": "net.transport",
+    "name": "Transport layer basics",
+    "subject": "Computer Science",
+    "questions": [
+      { "type": "mcq", "prompt": "...", "options": ["a", "b", "c", "d"],
+        "answer": 0, "explain": "..." },
+      { "type": "cloze", "text": "SYN, {{SYN-ACK}}, {{ACK}}." }
+    ]
+  }
+}
+```
+
+Use `"quizzes": [ { ... }, { ... } ]` instead of `"quiz"` when one import
+carries several quizzes. `questions` is the key inside a quiz object; there is
+no other place question objects may appear.
+
+### Question objects
+
+Four types. `type` is required and must be exactly one of `mcq`, `cloze`,
+`short`, `ordering` — anything else is dropped at import with a warning, so the
+quiz silently arrives shorter than you wrote it.
+
+**`mcq`** — multiple choice.
+
+```jsonc
+{
+  "type": "mcq",
+  "prompt": "Which is **not** guaranteed by TCP?",
+  "options": ["Ordered delivery",
+              "Retransmission of lost segments",
+              "Bounded latency",
+              "Flow control"],
+  "answer": 2,
+  "explain": "TCP promises delivery, not timeliness — nothing in it bounds latency. Flow control is guaranteed: the receive window exists to stop a fast sender overrunning a slow receiver."
+}
+```
+
+| Key | Required | Type | Meaning |
+|---|---|---|---|
+| `prompt` | **yes** | string | The question. |
+| `options` | **yes** | array of strings | At least 2; four is the house style. |
+| `answer` | **yes** | integer, or array of integers | Zero-based index into `options`. Use an array for multi-answer. |
+| `explain` | **yes** by this skill | string | Why the right answer is right, and what the attractive wrong one gets wrong. |
+
+**`cloze`** — fill the blanks. The text goes in `text`, not `prompt`.
+
+```jsonc
+{
+  "type": "cloze",
+  "text": "The TCP handshake is SYN, {{SYN-ACK|SYN ACK}}, then {{ACK}}.",
+  "explain": "Three segments, synchronising sequence numbers in both directions.",
+  "match": "loose"
+}
+```
+
+| Key | Required | Type | Meaning |
+|---|---|---|---|
+| `text` | **yes** | string | Sentence with `{{...}}` marking each blank. One or two blanks. |
+| `explain` | no | string | |
+| `match` | no | `"loose"` (default) or `"exact"` | |
+
+Alternatives inside a blank are separated by a pipe; the first is shown as the
+answer: `{{SYN-ACK|SYN ACK}}`, `{{n|dim V}}`.
+
+**`short`** — typed answer. The accepted answers go in `answers`, an array.
+
+```jsonc
+{
+  "type": "short",
+  "prompt": "Which OSI layer does TCP sit at?",
+  "answers": ["transport", "layer 4", "4"],
+  "match": "loose",
+  "explain": "Segments and ports live at layer 4."
+}
+```
+
+| Key | Required | Type | Meaning |
+|---|---|---|---|
+| `prompt` | **yes** | string | |
+| `answers` | **yes** | array of strings | Every acceptable form. Non-empty. |
+| `match` | no | `"loose"` (default) or `"exact"` | |
+| `explain` | no | string | |
+
+**`ordering`** — put the steps back in order. The steps go in `items`.
+
+```jsonc
+{
+  "type": "ordering",
+  "prompt": "Order these by what a packet meets first, leaving your machine",
+  "items": ["Application", "Transport", "Network", "Data link"],
+  "explain": "Each layer wraps the one above it on the way out."
+}
+```
+
+| Key | Required | Type | Meaning |
+|---|---|---|---|
+| `prompt` | **yes** | string | |
+| `items` | **yes** | array of strings | **Written in the correct order** — the app shuffles them. 3–6 items, each under ~8 words. |
+| `explain` | no | string | |
+
+### Matching
+
+`"loose"` (the default everywhere) ignores case, surrounding whitespace, and
+punctuation, including full-width CJK punctuation. `"exact"` compares the
+trimmed string as written; use it only when the precise form is the point.
 
 ---
 
@@ -51,20 +241,22 @@ must be few and stable. Use the name of the course or exam, never a chapter:
 |---|---|
 | `Mathematics::Linear Algebra` | `Linear Algebra` (chapter promoted to subject) |
 | `Computer Science::Networks` | `CS::Networks::TCP::Handshake` (four levels) |
-| `TMUA::Paper 1 Reasoning` | `TMUA 2026 Paper 1 Reasoning Practice` (dated, verbose) |
+| `CAIE 9618::Data Representation` | `9618 Paper 1 Revision Notes 2026` (dated, verbose) |
 
 Rules:
 
-- Two levels by default, three only when a module exceeds ~60 cards.
-- Title Case. No dates, no years, no "revision"/"notes"/"practice" suffixes.
+- Two levels by default; a third only when one module exceeds roughly 60 cards.
+  This is about organisation and has nothing to do with how many cards you send
+  in one object — see *Scope and batching*.
+- Title Case. No dates, no years, no revision/notes/practice suffixes.
 - Reuse an existing subject exactly as spelled — a typo creates a second subject
   with its own daily budget.
-- Set `deck` once at the top level; use the per-card `deck` override only when a
-  batch genuinely spans modules.
+- Set `deck` once at the top level; use the per-card override only when a batch
+  genuinely spans modules.
 
 ---
 
-## Cards
+## Writing cards
 
 ### The atomicity rule
 
@@ -85,40 +277,61 @@ written one.
 { "front": "What does TCP guarantee that UDP does not?",
   "back": "Ordered, reliable delivery — lost segments are retransmitted." }
 { "front": "How does TCP detect that a segment was lost?",
-  "back": "The acknowledgement for it never arrives before the timer expires, or
-           three duplicate ACKs arrive for the segment before it." }
+  "back": "The retransmission timer expires, or three duplicate ACKs arrive for
+           the preceding segment." }
 { "front": "Which two algorithms make up TCP congestion control?",
   "back": "Slow start, then AIMD — additive increase, multiplicative decrease." }
 ```
 
 ### `front`
 
-- A question, or an imperative: *Define…*, *State…*, *Why…*, *When…*, *Given…*.
+Must be a question or an imperative. The validator accepts a front containing
+`?` or `？`, or one starting with any of these openers — this is the list it
+actually checks, reproduced verbatim:
+
+```
+what which why when where who whose how
+define state name list give recall identify
+explain describe outline justify compare contrast distinguish summarise
+  summarize interpret
+calculate compute evaluate solve find determine derive prove show verify
+  simplify expand factorise factorize differentiate integrate convert express
+  rewrite write build construct draw sketch label complete translate order
+  arrange given suppose consider
+```
+
+Beyond that:
+
 - Under ~20 words. If it needs a paragraph of setup, the card is too big.
-- Must be answerable without seeing other cards. `"And the second case?"` is
-  meaningless in a shuffled deck.
-- Never *"List all…"* unless the list is closed and has at most five members.
-- Include the qualifier that makes the answer unique. *"What is the complexity?"*
-  is unanswerable; *"What is the average-case complexity of quicksort?"* is not.
+- Answerable without seeing other cards. "And the second case?" is meaningless
+  in a shuffled deck.
+- `list` and `name` are valid openers, but **"List all …" is still banned** — an
+  open-ended enumeration cannot be graded honestly. "List the three states of a
+  TCP connection" is fine; "List all TCP options" is not.
+- Include the qualifier that makes the answer unique. "What is the complexity?"
+  is unanswerable; "What is the average-case complexity of quicksort?" is not.
 
 ### `back`
 
 - **First sentence is the answer.** No restating the question, no "Well, …".
-- Under ~50 words. Supporting detail goes in up to four `-` bullets beneath.
+- Under ~50 words. Supporting detail goes in up to four bullets beneath.
+- **Length is measured in English-word equivalents.** A CJK character counts as
+  0.4 of a word, so the ceiling is roughly 125 Chinese characters, and a
+  bilingual card is not penalised for carrying both forms of a term.
 - No hedging ("usually", "some people say") unless the hedge is the fact.
-- Bold at most one phrase per card, and only for the word that carries the
-  distinction: `A **nonzero** vector $v$ with $Av = \\lambda v$.`
+- Bold at most one phrase per card, and only the word carrying the distinction.
 - Do not end with an unasked-for aside. If it is worth knowing, it is its own card.
 
 ### `hint`
 
-Optional and rare. Use it only when `front` is genuinely ambiguous without a
-nudge — not to make a hard card easier. Under 8 words, and it must not contain
-the answer.
+Optional and rare. Only when `front` is genuinely ambiguous without a nudge —
+not to make a hard card easier. Under 8 words, and it must not contain the
+answer. The validator flags a hint sharing distinctive words with its own back,
+in Latin script and in Chinese.
 
 ```jsonc
-"front": "When is $A$ diagonalisable?", "hint": "count eigenvectors"     // good
-"front": "When is $A$ diagonalisable?", "hint": "n independent ones"     // gives it away
+"front": "When is $A$ diagonalisable?", "hint": "count eigenvectors"   // good
+"front": "When is $A$ diagonalisable?", "hint": "n independent ones"   // gives it away
 ```
 
 ### `tags`
@@ -128,30 +341,31 @@ Lower case, singular, from this controlled list. Two at most:
 `definition` · `theorem` · `proof` · `formula` · `procedure` · `example` ·
 `pitfall` · `exam`
 
-Use `pitfall` for cards that exist because the fact is commonly confused, and
-`exam` for material a syllabus explicitly names. Do not invent tags per chapter —
-the deck path already says which chapter it is.
+`pitfall` for cards that exist because the fact is commonly confused; `exam` for
+material a syllabus explicitly names. Do not invent tags per chapter — the deck
+path already says which chapter it is.
 
 ### `id`
 
-Include one on every card. It makes an import repeatable: re-importing an
-edited card updates it instead of creating a duplicate.
+Include one on every card. It makes an import repeatable: re-importing an edited
+card updates it instead of creating a duplicate.
 
 ```
 <subject-abbr>.<topic>.<slug>
 
 la.eigenvector.def
 net.tcp.handshake-why-three
-calc.chain-rule.statement
+9618.data-rep.twos-complement
 ```
 
 Lower case, dot-separated, hyphens inside a segment, ASCII only, stable forever.
 When you revise a card's wording, keep its `id` — that is the whole point.
+Two cards sharing an `id` is an error: the second silently overwrites the first.
 
 ### Comparison cards
 
-Allowed, and useful, but the back must be structured and the axis of comparison
-must be named in the front:
+Allowed and useful, but the back must be structured and the axis of comparison
+named in the front:
 
 ```jsonc
 { "id": "os.process-vs-thread.memory",
@@ -170,100 +384,73 @@ be graded.
 - **JSON needs backslashes doubled**: `"$Av = \\lambda v$"`. Getting this wrong
   is the single most common failure — check every backslash before you finish.
 - Variables and function names in maths mode: `$n$`, `$\\operatorname{rank}(A)$`.
-  Never `rank(A)` in plain text next to `$n$` in maths.
 - Display mode for anything with a fraction, sum, integral, or matrix.
-- Markdown available in card text: `**bold**`, `*italic*`, `` `code` ``, `- `
-  bullets, `1. ` numbers, blank line between paragraphs.
-- Prose is prose — do not wrap ordinary words in `$…$` to make them look formal.
+- Markdown available in card text: bold, italic, inline code, `- ` bullets,
+  `1. ` numbered lists, blank line between paragraphs.
+- Prose is prose — do not wrap ordinary words in dollar signs to look formal.
 
 ---
 
-## Quizzes
+## Writing quizzes
 
 A quiz is a fixed set for one sitting. It is not scheduled and does not touch any
 card's schedule, so it is for *checking* a chapter, not for memorising it.
 
 - 8–15 questions. Fewer is not worth the ceremony; more is a slog.
-- `name`: the chapter or topic, matching how the user refers to it.
-- `subject`: the deck's **subject** level, so quizzes group alongside cards.
-- `id`: `<subject-abbr>.<topic>` — re-importing replaces the questions and keeps
-  the score history.
 - Mix types. An all-MCQ quiz tests recognition only.
 
-### `mcq`
+**MCQ distractors must be wrong for a nameable reason** — a real misconception,
+an off-by-one, a swapped direction, the right answer to a neighbouring question.
+Never filler, never obviously absurd. Keep all options the same grammatical shape
+and roughly the same length; a longer, more qualified option is a tell. Vary the
+answer index across the quiz.
 
-- Exactly four options unless the question is genuinely binary.
-- **Distractors must be wrong for a nameable reason** — a real misconception, an
-  off-by-one, a swapped direction, the right answer to a neighbouring question.
-  Never filler, never obviously absurd.
-- All options the same grammatical shape and roughly the same length. A longer,
-  more qualified option is a tell.
-- Vary the answer index across the quiz. Do not leave every answer at 1.
-- `explain` is **required**: say why the right answer is right *and* what the
-  attractive wrong one gets wrong.
-- Use `"answer": [0, 2]` for multi-answer, and say "Select all that apply" in the
-  prompt.
+**Cloze** blanks the load-bearing term, never an article or a connective. The
+surrounding text must make the expected form obvious.
 
-```jsonc
-{ "type": "mcq",
-  "prompt": "Which is **not** guaranteed by TCP?",
-  "options": ["Ordered delivery", "Retransmission of lost segments",
-              "Bounded latency", "Flow control"],
-  "answer": 2,
-  "explain": "TCP promises delivery, not timeliness — nothing in it bounds latency. Flow control is guaranteed: the receive window exists precisely to stop a fast sender overrunning a slow receiver." }
-```
+**Short answer** needs every acceptable form listed. If you cannot enumerate
+them, it is not a short-answer question — make it a card instead.
 
-### `cloze`
-
-- One or two blanks per question. Three is a sentence with holes, not a question.
-- Blank the **load-bearing term**, never an article or a connective.
-- Give alternatives with `|` whenever a correct answer has more than one accepted
-  spelling: `{{SYN-ACK|SYN ACK}}`, `{{n|dim V}}`.
-- The surrounding text must make the expected form obvious. If a blank could
-  reasonably take a word or a symbol, list both.
-
-### `short`
-
-- Answers where the expected response is one word, one symbol, or one number.
-- **List every reasonable form**: `["transport", "layer 4", "4"]`,
-  `["lambda", "λ"]`. Default matching already ignores case, spacing, and
-  punctuation — you are covering genuine synonyms, not typography.
-- If you cannot enumerate the acceptable answers, it is not a short-answer
-  question. Make it a card instead.
-- `"match": "exact"` only when the precise string is the point.
-
-### `ordering`
-
-- 3–6 items, written in the correct order — the app shuffles them.
-- Use for genuine sequences: protocol exchanges, algorithm phases, proof steps,
-  layer stacks. Not for ranking by size or preference, where "correct" is arguable.
-- Each item under ~8 words.
+**Ordering** is for genuine sequences: protocol exchanges, algorithm phases,
+proof steps, layer stacks. Not for ranking by size or preference, where
+"correct" is arguable.
 
 ---
 
-## Batch size and pacing
+## Scope and batching
+
+**Deliver the whole scope the user asked for, in one reply.** If they asked for a
+chapter, they get the chapter. Splitting the *output* across several JSON objects
+is a formatting decision, not permission to hand over an instalment and wait for
+a go-ahead. Only stop early if the user asked for a part, or if you genuinely
+cannot fit the rest — and then say exactly what is missing.
 
 - **At most 40 cards per JSON object.** Beyond that, mistakes hide and the user
   cannot review the paste.
-- A chapter usually yields 15–30 cards. If you are producing 80 from one lecture,
-  you are transcribing rather than selecting.
+- A reply may contain several such objects, back to back. They may share the
+  same `deck`; nothing about splitting the output changes where cards land.
+- **Card count follows the material's term density, not a target.** A dense
+  syllabus chapter — data representation, instruction sets, statistical tests —
+  legitimately yields 60–90 cards. A discursive chapter yields 15–25. Neither
+  number is a goal.
+- Never pad to hit a number the user named, and never trim below what the
+  material carries. If you found fewer than asked, say so and why.
 - Order cards the way the material is taught — definitions before theorems,
   theorems before applications. New cards enter the queue in insertion order.
-- Never pad to hit a number the user named. Say you found fewer than asked and
-  why.
 
 ---
 
 ## Validate — not optional
 
 ```bash
-python3 scripts/validate_cards.py cards.json --strict
+python3 /absolute/path/to/knowledge-cards/scripts/validate_cards.py /tmp/cards.json --strict
 ```
 
-Paths are relative to this skill's directory. Exit code 0 means clean; 1 means
-something to fix. Read stdin with `-` if you prefer not to keep a file around.
+Use the **absolute path** to the script. The skill directory is often read-only,
+so write your JSON somewhere writable such as `/tmp`. Pass `-` instead of a file
+to read stdin. Exit code 0 means clean, 1 means something to fix.
 
-It reports two levels:
+Two levels:
 
 - **ERROR** — the app would refuse the entry, or would silently do the wrong
   thing (a duplicate `id` overwrites an existing card). Never hand over output
@@ -277,10 +464,10 @@ positive, say so explicitly in your reply rather than quietly ignoring it.
 
 ### The three failures it exists to catch
 
-**A single backslash.** `"$Av = \lambda v$"` is not valid JSON — `\l` is not an
-escape sequence, and the whole payload fails to parse. Every backslash in maths
-must be doubled: `"$Av = \\lambda v$"`. This is the most common failure by a
-wide margin.
+**A single backslash.** A lone backslash before a TeX command is not valid JSON —
+`\l` is not an escape sequence, and the whole payload fails to parse. Every
+backslash in maths must be doubled. This is the most common failure by a wide
+margin.
 
 **Comments.** The examples in this file annotate with `//` for readability.
 JSON has no comments. Real output must contain none.
@@ -289,29 +476,31 @@ JSON has no comments. Real output must contain none.
 
 ### If Python is unavailable
 
-Fall back to checking by hand: valid JSON (no comments, no trailing commas,
-doubled backslashes) · every card has `id`, `front`, `back`, and a deck · no
-`back` over ~50 words or holding two independent facts · no `front` that is
-unanswerable out of context · tags from the controlled list · mcqs with four
-options, a varied answer index, `explain` present, and distractors that are
-wrong for a nameable reason. Say in your reply that you could not run the
-validator.
+Check by hand: valid JSON (no comments, no trailing commas, doubled
+backslashes) · every card has `id`, `front`, `back`, and a deck · no duplicate
+`id` · no `back` over ~50 word-equivalents or holding two independent facts · no
+`front` that is unanswerable out of context · tags from the controlled list ·
+mcqs with four options, a varied answer index, `explain` present, and distractors
+wrong for a nameable reason · cloze text in `text` with blanks · short answers in
+`answers` · ordering steps in `items`. Say in your reply that you could not run
+the validator.
 
 ### What it cannot check
 
 Judgement stays yours: whether a distractor is *plausibly* wrong rather than
-merely present, whether a card is worth making at all, and whether the deck path
-reuses an existing subject with its exact spelling. Look at the deck list before
-you invent a subject.
+merely present, whether a card is worth making at all, whether material should
+have been triaged into "neither", and whether the deck path reuses an existing
+subject with its exact spelling.
 
 ---
 
-## Shape of a finished answer
+## Worked examples
 
-Two complete, validated examples live in `samples/` at the repository root —
-`mathematics-linear-algebra.json` and `computer-science-networks.json`. Both pass
-`--strict`, and the test suite keeps them that way. Read one before writing your
-first batch.
+`reference/example-cards.json` and `reference/example-quiz.json` sit next to this
+file. Both pass `--strict`, and the repository's test suite keeps them that way.
+Read one before your first batch.
+
+A finished answer looks like this:
 
 > 24 cards for `Mathematics::Linear Algebra`, covering eigenvalues through
 > diagonalisation.
@@ -323,19 +512,19 @@ first batch.
     {
       "id": "la.eigenvector.def",
       "front": "Define an eigenvector of $A$",
-      "back": "A **nonzero** vector $v$ such that $Av = \\lambda v$ for some scalar $\\lambda$.\n\n- $\\lambda$ is the corresponding eigenvalue\n- The zero vector is excluded, or every scalar would qualify",
+      "back": "A **nonzero** vector $v$ such that $Av = \\lambda v$ for some scalar $\\lambda$.\n\n- $\\lambda$ is the corresponding eigenvalue\n- Zero is excluded, or every scalar would qualify",
       "tags": ["definition"]
     },
     {
       "id": "la.diagonalisable.condition",
       "front": "When is an $n \\times n$ matrix diagonalisable?",
       "back": "When it has $n$ linearly independent eigenvectors.\n\n- $n$ distinct eigenvalues is sufficient but not necessary\n- $I$ is diagonalisable with one repeated eigenvalue",
-      "hint": "count eigenvectors",
+      "hint": "count them",
       "tags": ["theorem"]
     }
   ]
 }
 ```
 
-If the user asked for both, put `cards` and `quiz` in the same object rather than
-emitting two blocks.
+If the user asked for both cards and a quiz, put `cards` and `quiz` in the same
+object rather than emitting two blocks.

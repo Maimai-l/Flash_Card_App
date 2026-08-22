@@ -1,5 +1,10 @@
 # Import format
 
+> This is the app's reference for what the importer accepts. If you are *writing*
+> cards, the authority is `.claude/skills/knowledge-cards/SKILL.md`, which is
+> self-contained and ships its own validator — do not treat this file as a
+> prerequisite for it.
+
 Everything enters the app as JSON pasted into the Import page. There are two
 shapes, and they are unrelated to each other:
 

@@ -35,3 +35,6 @@ youdao_cache/
 *.db
 *.log
 node_modules/
+
+# Python caches inside the skill
+.claude/skills/**/__pycache__/

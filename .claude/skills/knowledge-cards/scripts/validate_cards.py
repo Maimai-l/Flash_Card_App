@@ -30,10 +30,24 @@ TAG_VOCABULARY = {
 }
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)+$")
 CLOZE_PATTERN = re.compile(r"\{\{(.+?)\}\}", re.S)
+# Fronts are questions or imperatives. This list is reproduced verbatim in
+# SKILL.md — keep the two in step, or authors are guessing at what passes.
 QUESTION_OPENERS = (
-    "define", "state", "why", "when", "what", "which", "how", "who", "where",
-    "given", "name", "list", "explain", "compare", "prove", "derive", "show",
+    # interrogatives
+    "what", "which", "why", "when", "where", "who", "whose", "how",
+    # asking-for-recall imperatives
+    "define", "state", "name", "list", "give", "recall", "identify",
+    # asking-for-explanation imperatives
+    "explain", "describe", "outline", "justify", "compare", "contrast",
+    "distinguish", "summarise", "summarize", "interpret",
+    # asking-for-work imperatives
+    "calculate", "compute", "evaluate", "solve", "find", "determine", "derive",
+    "prove", "show", "verify", "simplify", "expand", "factorise", "factorize",
+    "differentiate", "integrate", "convert", "express", "rewrite", "write",
+    "build", "construct", "draw", "sketch", "label", "complete", "translate",
+    "order", "arrange", "given", "suppose", "consider",
 )
+QUESTION_MARKS = ("?", "？")
 
 MAX_FRONT_WORDS = 20
 MAX_BACK_WORDS = 50
@@ -60,11 +74,21 @@ class Report:
 
 # ── Text helpers ──────────────────────────────────────────────────────────
 
+CJK_WEIGHT = 0.4  # a CJK character is worth ~0.4 of an English word
+
+
 def words(text: str) -> int:
-    """Word count that treats CJK characters as words in their own right."""
+    """
+    Length in English-word equivalents.
+
+    Counting each Chinese character as one word squeezed CJK and bilingual
+    cards to roughly a third of the length an English card was allowed, with
+    nothing in the rules saying so. A character is weighted at CJK_WEIGHT, so
+    the 50-word ceiling is about 125 Chinese characters.
+    """
     latin = re.findall(r"[A-Za-z0-9'’\-]+", text)
-    cjk = re.findall(r"[一-鿿]", text)
-    return len(latin) + len(cjk)
+    cjk = re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", text)
+    return round(len(latin) + len(cjk) * CJK_WEIGHT)
 
 
 def strip_math(text: str) -> str:
@@ -117,8 +141,10 @@ def validate_card(entry, index: int, default_deck: str, report: Report) -> dict 
     if words(front) > MAX_FRONT_WORDS:
         report.warn(label, f"front is {words(front)} words — over {MAX_FRONT_WORDS}, so it is doing too much")
     plain_front = strip_math(front).strip().lower()
-    if plain_front and "?" not in front and not plain_front.startswith(QUESTION_OPENERS):
-        report.warn(label, "front is neither a question nor an imperative")
+    asks = any(mark in front for mark in QUESTION_MARKS)
+    if plain_front and not asks and not plain_front.startswith(QUESTION_OPENERS):
+        report.warn(label, "front is neither a question nor an imperative "
+                           "(see the opener list in SKILL.md)")
     if re.match(r"^(list|name)\s+all\b", plain_front):
         report.warn(label, "'list all' cards cannot be graded honestly — split them")
 
@@ -153,12 +179,25 @@ def validate_card(entry, index: int, default_deck: str, report: Report) -> dict 
     return {"id": entry.get("id"), "deck": deck, "front": front}
 
 
+LATIN_STOPWORDS = {"which", "there", "these", "those", "where", "about",
+                   "every", "under", "their", "between", "because"}
+CJK_STOPWORDS = {"因为", "所以", "可以", "就是", "这个", "那个", "一个", "什么",
+                 "不是", "以及", "并且", "如果", "然后", "表示", "进行", "使用"}
+
+
 def shared_terms(hint: str, back: str) -> set[str]:
-    """Distinctive words appearing in both — the usual way a hint leaks."""
-    def terms(text):
+    """Distinctive terms appearing in both — the usual way a hint leaks."""
+    def latin(text):
         return {w.lower() for w in re.findall(r"[A-Za-z]{5,}", strip_math(text))}
-    common = {"which", "there", "these", "those", "where", "about", "every", "under", "their"}
-    return (terms(hint) & terms(back)) - common
+
+    def cjk_bigrams(text):
+        grams = set()
+        for run in re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]{2,}", strip_math(text)):
+            grams |= {run[i:i + 2] for i in range(len(run) - 1)}
+        return grams
+
+    return ((latin(hint) & latin(back)) - LATIN_STOPWORDS) | \
+           ((cjk_bigrams(hint) & cjk_bigrams(back)) - CJK_STOPWORDS)
 
 
 def validate_deck_path(deck: str, where: str, report: Report):
