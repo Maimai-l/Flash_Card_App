@@ -107,10 +107,6 @@ class Api:
         return self.ctx.study.undo()
 
     @api_call
-    def get_forecast(self, deck="", days=7):
-        return self.ctx.study.forecast(deck, int(days))
-
-    @api_call
     def spread_overdue(self, deck="", days=7):
         return self.ctx.study.spread_overdue(deck, int(days))
 

@@ -354,8 +354,6 @@ await page.click('.nav-link:has-text("Home")');
 await page.waitForSelector('.due-card');
 check('a deck-scoped page still lists decks',
   (await page.locator('#sidebar').textContent()).includes('All decks'));
-check('the forecast paints a bar for a scheduled day',
-  await page.locator('.forecast-bar').count() > 0);
 
 // ── Cards: one list you keep scrolling ────────────────────────────────────
 await call('import_commit', [JSON.stringify({

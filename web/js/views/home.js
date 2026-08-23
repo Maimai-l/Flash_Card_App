@@ -12,10 +12,9 @@ import { navigate, render } from '../core/router.js';
 const WEEK_ROWS = 7;
 
 export async function renderHome() {
-  const [overview, heat, forecast] = await Promise.all([
+  const [overview, heat] = await Promise.all([
     api.get_overview(S.deck),
     api.get_heatmap(S.deck, 182),
-    api.get_forecast(S.deck, 7),
   ]);
 
   if (overview.error) {
@@ -95,42 +94,8 @@ export async function renderHome() {
           <div class="card card-pad states-card">
             <div class="section-label">${esc(t('total_cards'))}</div>
             ${statesHtml(overview.states, overview.total_cards)}
-          </div>
-          <div class="card card-pad forecast-card">
-            <div class="section-label">${esc(t('coming_up'))}</div>
-            ${forecastHtml(forecast)}
           </div>` : ''}
       </div>
-    </div>`;
-}
-
-/* What is already scheduled for the next week.
-
-   Descriptive, not a target: it exists so a heavy day is visible before it
-   arrives and you can decide whether to spread the backlog. */
-function forecastHtml(forecast) {
-  if (!forecast || !forecast.days) return '';
-  const days = forecast.days;
-  const peak = Math.max(1, ...days.map((d) => d.count));
-  const locale = S.lang === 'zh' ? 'zh-CN' : 'en-US';
-
-  return `
-    <div class="forecast">
-      ${days.map((day, index) => {
-        const date = new Date(day.day + 'T00:00:00');
-        const label = index === 0
-          ? t('today_short')
-          : date.toLocaleDateString(locale, { weekday: 'short' });
-        return `
-          <div class="forecast-day" data-tip="${attr(t('reviews_on', { n: day.count, date: day.day }))}">
-            <div class="forecast-bar-wrap">
-              <div class="forecast-bar" style="height:${
-                day.count ? Math.max(4, Math.round(100 * day.count / peak)) : 0}%"></div>
-            </div>
-            <div class="forecast-count">${day.count || ''}</div>
-            <div class="forecast-label">${esc(label)}</div>
-          </div>`;
-      }).join('')}
     </div>`;
 }
 

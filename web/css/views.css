@@ -18,10 +18,9 @@
 }
 .heat-card { width: max-content; max-width: 100%; grid-column: 2; grid-row: 1; }
 .states-card { grid-column: 1; grid-row: 2; }
-.forecast-card { grid-column: 2; grid-row: 2; }
 @media (max-width: 1080px) {
   .home-grid { grid-template-columns: minmax(0, 1fr); }
-  .heat-card, .states-card, .forecast-card {
+  .heat-card, .states-card {
     width: auto; grid-column: 1; grid-row: auto;
   }
 }
@@ -428,42 +427,6 @@
   .import-grid { grid-template-columns: minmax(0, 1fr); }
   .import-side { position: static; }
 }
-
-/* ── Forecast ───────────────────────────────────────────────────────────── */
-.forecast { display: flex; align-items: flex-end; gap: 10px; }
-.forecast-day {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  min-width: 26px;
-}
-/* The bar is positioned rather than flexed: a percentage height needs a parent
-   with a definite height, which a flex:1 track does not reliably give it. */
-.forecast-bar-wrap {
-  position: relative;
-  height: 72px;
-  width: 100%;
-  background: var(--border-soft);
-  border-radius: 5px;
-  overflow: hidden;
-}
-.forecast-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--heat-3);
-  border-radius: 5px;
-}
-.forecast-count {
-  font-size: 11.5px;
-  color: var(--text-sub);
-  font-variant-numeric: tabular-nums;
-  min-height: 15px;
-}
-.forecast-label { font-size: 11px; color: var(--text-faint); }
 
 .issue-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 .issue {
