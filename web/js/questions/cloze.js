@@ -1,9 +1,10 @@
-/* Cloze deletion. The author decides what is hidden by wrapping it in {{…}};
+/* Cloze deletion. The author decides what is hidden by wrapping it in {{ }};
    the app never picks blanks itself. Alternatives are separated by | and the
    first one is what gets shown as the answer. */
 
 import { esc } from '../core/dom.js';
 import { rich } from '../core/render.js';
+import { t } from '../core/i18n.js';
 import { matchesAny, parseCloze } from './util.js';
 
 const cloze = {
@@ -27,13 +28,11 @@ const cloze = {
       }
       const ok = matchesAny(given, part.answers, question.match || 'loose');
       return `<span class="cloze-blank ${ok ? 'correct' : 'wrong'}"
-                    style="min-width:0;display:inline">${esc(given || '—')}</span>${
+                    style="min-width:0;display:inline">${esc(given || t('blank'))}</span>${
         ok ? '' : `<span class="cloze-answer">${esc(part.answers[0])}</span>`}`;
     }).join('');
 
-    return `
-      ${question.prompt ? `<div class="q-prompt">${rich(question.prompt)}</div>` : ''}
-      <div class="cloze-text">${body}</div>`;
+    return `<div class="q-card cloze-text">${body}</div>`;
   },
 
   mount(root, question, state, ctx) {
@@ -71,7 +70,7 @@ const cloze = {
   summary(question, response) {
     const parts = parseCloze(String(question.text || '')).filter((p) => p.blank !== undefined);
     return {
-      given: parts.map((p) => (response || [])[p.blank] || '—').join(' · '),
+      given: parts.map((p) => (response || [])[p.blank] || t('blank')).join(' · '),
       correct: parts.map((p) => p.answers[0]).join(' · '),
     };
   },

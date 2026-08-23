@@ -63,7 +63,7 @@ function renderDeckTree(sidebar) {
     const collapsed = S.collapsed.has(deck.path);
     return `
       <div class="deck-item ${S.deck === deck.path ? 'active' : ''}"
-           style="padding-left:${8 + deck.depth * 13}px"
+           style="padding-left:${6 + deck.depth * 14}px"
            data-action="selectDeck" data-deck="${attr(deck.path)}">
         <span class="deck-twisty ${children ? (collapsed ? 'collapsed' : '') : 'leaf'}"
               ${children ? `data-action="toggleDeck" data-deck="${attr(deck.path)}"` : ''}>${CHEVRON}</span>
@@ -74,17 +74,30 @@ function renderDeckTree(sidebar) {
       </div>`;
   }).join('');
 
-  sidebar.innerHTML = `
-    <div class="section-label" style="padding:0 10px">
-      <span class="grow">${esc(t('decks'))}</span>
-      <button class="icon-btn" data-action="addDeck" title="${attr(t('add_deck'))}">${PLUS}</button>
-    </div>
+  sidebar.innerHTML = railHead(t('decks'),
+    `<button class="icon-btn" data-action="addDeck" title="${attr(t('add_deck'))}">${PLUS}</button>`) + `
     <div class="deck-item ${S.deck === '' ? 'active' : ''}" data-action="selectDeck" data-deck="">
       <span class="deck-twisty leaf">${CHEVRON}</span>
       <span class="deck-name">${esc(t('all_decks'))}</span>
       ${totals.due + totals.neu ? `<span class="deck-count">${totals.due + totals.neu}</span>` : ''}
     </div>
     ${rows}`;
+}
+
+/**
+ * The header every left-hand panel opens with.
+ *
+ * Only the deck panel has an action, and letting the button simply be absent on
+ * the other pages made the header shorter there, so the first row of the list
+ * started higher and Quiz did not line up with Home. The slot is a fixed size
+ * and the row a fixed height whether or not anything is in it.
+ */
+export function railHead(title, action = '') {
+  return `
+    <div class="rail-head">
+      <span class="grow section-label" style="margin:0">${esc(title)}</span>
+      <span class="rail-slot">${action}</span>
+    </div>`;
 }
 
 export async function refreshDecks() {

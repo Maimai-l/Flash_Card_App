@@ -122,24 +122,6 @@ class CardRepository(Repository):
             (review_cutoff, now),
         )
 
-    def overdue_cards(self, deck_ids, cutoff: str) -> list[dict]:
-        """Review cards whose due date fell before the start of today."""
-        where, params = _deck_filter(deck_ids)
-        return self._all(
-            f"SELECT {CARD_COLUMNS} FROM Card WHERE {where} AND suspended = 0 "
-            "AND last_review IS NOT NULL AND fsrs_state = 2 AND due_date < ? "
-            "ORDER BY due_date",
-            params + (cutoff,),
-        )
-
-    def count_overdue(self, deck_ids, cutoff: str) -> int:
-        where, params = _deck_filter(deck_ids)
-        return self._scalar(
-            f"SELECT COUNT(*) FROM Card WHERE {where} AND suspended = 0 "
-            "AND last_review IS NOT NULL AND fsrs_state = 2 AND due_date < ?",
-            params + (cutoff,),
-        )
-
     # ── Writes ────────────────────────────────────────────────────────────
 
     def create(self, deck_id: int, front: str, back: str, hint="", tags="", ext_id=None) -> int:
@@ -203,21 +185,6 @@ class CardRepository(Repository):
             f"SELECT {CARD_COLUMNS} FROM Card WHERE deck_id = ? AND front = ?",
             (int(deck_id), front),
         )
-
-    def set_due_dates(self, pairs: list[tuple[int, str]]) -> int:
-        """Bulk-reschedule: [(card_id, due_iso), ...]."""
-        if not pairs:
-            return 0
-        conn = self.db.connect()
-        try:
-            conn.executemany(
-                "UPDATE Card SET due_date = ?, updated_at = datetime('now') WHERE card_id = ?",
-                [(due, int(cid)) for cid, due in pairs],
-            )
-            conn.commit()
-        finally:
-            conn.close()
-        return len(pairs)
 
     # ── Review + log ──────────────────────────────────────────────────────
 

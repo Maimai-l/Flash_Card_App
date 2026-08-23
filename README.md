@@ -46,9 +46,8 @@ The two never mix. That is the whole design.
 ## Daily limits
 
 Every subject has its own cap on new cards and reviews per day. Anything beyond
-the cap simply does not appear — the backlog is shown as a quiet line of text,
-not a red badge, and *Spread out* will flatten an accumulated pile across the
-next few days.
+the cap simply does not appear. Two weeks away does not build a wall: the day you
+come back you are offered one day's worth, like any other day.
 
 Limits belong to top-level decks. Studying a chapter draws from its subject's
 budget rather than getting a fresh one, and studying "all decks" walks each
@@ -60,25 +59,39 @@ through a deck without scheduling anything at all.
 
 ## Importing
 
-Paste JSON into the Import page. *Copy schema for LLM* puts a full worked
-specification on your clipboard to hand to a model; paste back what it produces.
-Import previews exactly what it would do before writing anything, and skips bad
-entries rather than rejecting the whole paste.
+Paste JSON into the Import page. It previews exactly what it would do before
+writing anything, and skips bad entries rather than rejecting the whole paste.
+
+*Copy deck names* puts every existing deck path on your clipboard, sub-decks
+included, so whatever writes the JSON files the cards under a deck you already
+have instead of inventing one beside it. The format itself belongs to the
+authoring skill below, which is where it stays in step with the importer.
 
 The format is documented in [docs/SCHEMA.md](docs/SCHEMA.md). Sample files live
 in [samples/](samples/).
 
 ## Window layout
 
+Every page opens with the same two lines: a small label and a title, at a fixed
+height. Nothing else goes in that header, so the title sits at the same y and the
+first card starts at the same y on all six pages. Controls live under the header,
+in the content, rather than in a corner.
+
 The left column is mounted on every page so nothing shifts as you navigate, and
 each page decides what belongs in it: decks where the page is scoped by deck,
-subjects on Quiz, its own sections on Settings.
-
+subjects on Quiz, its own sections on Settings. Its header reserves the space for
+an action whether or not that page has one, so the first row of the list lines up
+across all six.
 
 The document never scrolls. The shell is exactly the viewport height, the top bar
 and deck sidebar sit outside the scroll container, and only the content pane
-scrolls — so a scrollbar appearing on a long page cannot move any control. The
+scrolls, so a scrollbar appearing on a long page cannot move any control. The
 pane also reserves its own scrollbar track, so its contents stay put too.
+
+Colour carries one meaning. New, Learning and Review are three shades of a single
+blue-to-ink ramp rather than three unrelated hues, and so are the heatmap and
+every bar in the app; red appears only where a quiz has actually marked something
+wrong.
 
 ## Keyboard
 
@@ -112,6 +125,7 @@ web/
   js/views/          one module per screen
   js/questions/      one module per question type
   vendor/katex/      bundled maths rendering, no CDN
+  vendor/fonts/      Archivo, bundled the same way
 tests/               pytest over repositories, services and HTTP
 ```
 
@@ -144,8 +158,9 @@ The e2e run needs Playwright and a server already running on port 8737.
 ## Authoring cards
 
 `.claude/skills/knowledge-cards/` is a Claude Code skill that standardises how
-cards get written — deck naming, field conventions, the atomicity rule, and the
-distractor rules for quiz questions. Ask Claude for cards inside this repository
+cards get written: deck and quiz naming, field conventions, the atomicity rule,
+and the distractor rules for quiz questions. Deck names are course names, never
+syllabus codes, and the validator says so. Ask Claude for cards inside this repository
 and it applies automatically; elsewhere, copy the folder into that project's
 `.claude/skills/`.
 
@@ -177,9 +192,15 @@ python3 -m scripts.package_skill /path/to/Flash_Card_App/.claude/skills/knowledg
 Run that from the `skill-creator` skill's directory. The resulting
 `knowledge-cards.skill` is a build artifact and is not committed.
 
-The Import page's *Copy schema for LLM* button covers the mechanical format for
-one-off use without the skill.
+Without the skill, the format is in [docs/SCHEMA.md](docs/SCHEMA.md), and the
+Import page's *Copy deck names* button supplies the one thing a document cannot:
+the decks this particular library already has.
 
 ## Language
 
 English and 中文, switched in Settings. Card content is never translated.
+
+The Latin face is Archivo, bundled in `web/vendor/fonts` rather than fetched.
+No Chinese face is bundled, because a CJK font is megabytes even subsetted; the
+system face is used instead, and `base.css` maps the heavy weights onto a real
+cut so nothing is rendered as a synthesised bold.

@@ -1,6 +1,6 @@
 /* Taking a quiz, then the results.
 
-   Questions have answer keys, so there is no self-rating here — you answer, the
+   Questions have answer keys, so there is no self-rating here: you answer, the
    app marks it, and nothing is written to any card's schedule.
 
    Every graded question is saved to the server before the screen moves on, so
@@ -9,14 +9,11 @@
 
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
-import { $content, esc, attr, showToast, setKeys, typingInInput } from '../core/dom.js';
+import { $content, esc, showToast, setKeys, typingInInput } from '../core/dom.js';
 import { rich } from '../core/render.js';
 import { t } from '../core/i18n.js';
 import { navigate } from '../core/router.js';
-import { questionType, questionLabel } from '../questions/index.js';
-
-const CLOSE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-  stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+import { questionType, questionLabel, questionPrompt } from '../questions/index.js';
 
 export async function renderQuizRun() {
   if (S.quizStart) {
@@ -101,37 +98,42 @@ function paint() {
   const showCheck = !state.answered && !type.autoSubmit(question);
   const canSubmit = type.canSubmit(question, state);
 
+  const promptText = questionPrompt(question);
+  const answered = S.quiz.states.filter((state) => state.answered).length;
+  const percent = Math.round(100 * answered / S.quiz.questions.length);
+
   $content().innerHTML = `
     <div class="study">
       <div class="study-top">
-        <button class="icon-btn" data-action="exitQuiz"
-                title="${attr(t('exit_session'))}">${CLOSE_ICON}</button>
+        <button class="btn btn-secondary btn-sm" data-action="exitQuiz">${esc(t('exit_session'))}</button>
         <span class="title">${esc(S.quiz.name)}</span>
         <span class="counter">${S.quiz.index + 1} / ${S.quiz.questions.length}</span>
       </div>
-      <div class="study-body"><div class="study-inner">
-        <div class="q-card">
+      <div class="quiz-progress"><span style="width:${percent}%"></span></div>
+      <div class="q-scroll">
+        <div class="q-column">
+          ${promptText ? `<div class="q-card q-prompt">${rich(promptText)}</div>` : ''}
           <div id="q-root">${type.render(question, state)}</div>
-          ${state.answered && question.explain
-            ? `<div class="q-explain">${rich(question.explain)}</div>` : ''}
-        </div>
-      </div></div>
-      <div class="study-foot"><div class="study-foot-inner">
-        <div class="reveal-row">
           ${showCheck ? `
-            <button class="btn btn-primary" data-action="submitQuestion"
-                    ${canSubmit ? '' : 'disabled'}>${esc(t('check'))}</button>` : ''}
+            <div class="q-actions">
+              <button class="btn btn-primary" data-action="submitQuestion"
+                      ${canSubmit ? '' : 'disabled'}>${esc(t('check'))}</button>
+              <span class="kbd">Enter</span>
+            </div>` : ''}
           ${state.answered ? `
-            <button class="btn btn-primary" data-action="nextQuestion">
-              ${esc(isLast ? t('finish') : t('next_question'))}
-            </button>` : ''}
+            <div class="q-verdict ${state.correct ? '' : 'wrong'}">
+              <span class="verdict-label">${esc(t(state.correct ? 'is_correct' : 'is_wrong'))}</span>
+              ${state.correct ? '' : verdictLines(question, state)}
+              ${question.explain ? `<div class="q-explain">${rich(question.explain)}</div>` : ''}
+              <div class="q-actions">
+                <button class="btn btn-primary" data-action="nextQuestion">
+                  ${esc(isLast ? t('finish') : t('next_question'))}
+                </button>
+                <span class="kbd">Enter</span>
+              </div>
+            </div>` : ''}
         </div>
-        <div class="hint-line">${
-          state.answered || showCheck
-            ? '<kbd>Enter</kbd>'
-            : `<kbd>1</kbd>–<kbd>${(question.options || []).length}</kbd> ${esc(t('keys_answer'))}`
-        }</div>
-      </div></div>
+      </div>
     </div>`;
 
   const root = document.getElementById('q-root');
@@ -159,6 +161,16 @@ function paint() {
     }
     if (event.key === 'Enter' && canSubmit) { event.preventDefault(); submitCurrent(); }
   });
+}
+
+/* What you gave and what was expected, stated plainly rather than colour-coded
+   into a corner of the option list. */
+function verdictLines(question, state) {
+  const type = questionType(question.type);
+  const summary = type ? type.summary(question, state.response) : { given: '', correct: '' };
+  return `
+    <span class="verdict-line">${esc(t('your_answer'))}: <b>${esc(summary.given || t('blank'))}</b></span>
+    <span class="verdict-line">${esc(t('correct_answer'))}: <b>${esc(summary.correct)}</b></span>`;
 }
 
 function submitCurrent() {
@@ -192,42 +204,34 @@ function paintResults() {
 
   const rows = quiz.questions.map((question, index) => {
     const state = quiz.states[index];
-    const type = questionType(question.type);
-    const summary = type ? type.summary(question, state.response) : { given: '', correct: '' };
     return `
-      <div class="result-item">
-        <div class="result-q">
-          <span style="color:${state.correct ? 'var(--green)' : 'var(--red)'}">${
-            state.correct ? '✓' : '✗'}</span>
-          <span>${index + 1}. ${rich(questionLabel(question)).replace(/<\/?p>/g, '')}</span>
-        </div>
-        ${state.correct ? '' : `
-          <div class="result-line">${esc(t('your_answer'))}: <b>${esc(summary.given || '—')}</b></div>
-          <div class="result-line">${esc(t('correct_answer'))}: <b>${esc(summary.correct)}</b></div>`}
-        ${question.explain ? `<div class="result-line">${esc(question.explain)}</div>` : ''}
+      <div class="result-item ${state.correct ? '' : 'wrong'}">
+        <span class="mark">${state.correct ? '\u2713' : '\u2717'}</span>
+        <span class="label">${index + 1}. ${
+          rich(questionLabel(question)).replace(/<\/?p>/g, '')}</span>
       </div>`;
   }).join('');
 
   $content().innerHTML = `
     <div class="study">
       <div class="study-top">
-        <button class="icon-btn" data-action="exitQuiz">${CLOSE_ICON}</button>
+        <button class="btn btn-secondary btn-sm" data-action="exitQuiz">${esc(t('exit_session'))}</button>
         <span class="title">${esc(quiz.name)}</span>
       </div>
-      <div class="study-body" style="align-items:flex-start"><div class="study-inner">
-        <div class="result-hero">
+      <div class="q-scroll">
+        <div class="result-card">
           <div class="result-score">${correct} / ${total}</div>
           <div class="result-sub">${esc(t('score_line', { correct, total }))}</div>
+          <div class="result-list">${rows}</div>
+          <div class="result-actions">
+            <button class="btn btn-primary" data-action="exitQuiz">${esc(t('done'))}</button>
+            ${wrongCount ? `
+              <button class="btn btn-secondary" data-action="retryWrong">
+                ${esc(t('retry_wrong', { n: wrongCount }))}
+              </button>` : ''}
+          </div>
         </div>
-        <div class="card mb16">${rows}</div>
-        <div class="due-actions mb24">
-          ${wrongCount ? `
-            <button class="btn btn-secondary" data-action="retryWrong">
-              ${esc(t('retry_wrong', { n: wrongCount }))}
-            </button>` : ''}
-          <button class="btn btn-primary" data-action="exitQuiz">${esc(t('done'))}</button>
-        </div>
-      </div></div>
+      </div>
     </div>`;
 
   setKeys((event) => {

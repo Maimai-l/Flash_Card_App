@@ -1,4 +1,4 @@
-/* Multiple choice. Options and the answer key come from the imported JSON —
+/* Multiple choice. Options and the answer key come from the imported JSON;
    the app never invents distractors. A single-answer question submits on click;
    a multi-answer one toggles and waits for Check. */
 
@@ -37,6 +37,7 @@ const mcq = {
         classes.push('locked');
         if (correct.includes(index)) { classes.push('correct'); mark = '✓'; }
         else if (isChosen) { classes.push('wrong'); mark = '✗'; }
+        else classes.push('dim');
       } else if (isChosen) {
         classes.push('selected');
       }
@@ -49,9 +50,7 @@ const mcq = {
         </button>`;
     }).join('');
 
-    return `
-      <div class="q-prompt">${rich(question.prompt)}</div>
-      <div class="opt-list">${options}</div>`;
+    return `<div class="opt-list">${options}</div>`;
   },
 
   mount(root, question, state, ctx) {

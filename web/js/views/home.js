@@ -1,13 +1,14 @@
-/* Home: what is due in the selected deck, the two ways in, and the backlog.
+/* Home: what is due in the selected deck, the two ways in, and where it sits.
 
-   Deliberately quiet — no streaks, no targets, no red. The overdue line states
-   a number and offers a way to flatten it; it never nags. */
+   Deliberately quiet: no streaks, no targets, no red. The count and the two
+   buttons live together in the first card, so the thing the page is for is the
+   thing your eye lands on, and nothing important hides in a corner. */
 
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
-import { $content, esc, attr, showModal, closeModal, showToast } from '../core/dom.js';
+import { $content, esc, attr } from '../core/dom.js';
 import { t } from '../core/i18n.js';
-import { navigate, render } from '../core/router.js';
+import { navigate } from '../core/router.js';
 
 const WEEK_ROWS = 7;
 
@@ -28,83 +29,93 @@ export async function renderHome() {
   const total = newCount + reviewCount;
   const hasCards = overview.total_cards > 0;
 
-  // With several subjects in view the limits are per subject, not a shared
-  // pool, so stating one summed number would be a lie.
-  const limitLine = overview.subjects > 1
-    ? t('limit_per_subject')
-    : t('limit_line', {
-      new: overview.unlimited_new ? t('limit_unlimited') : overview.new_limit,
-      review: overview.unlimited_review ? t('limit_unlimited') : overview.review_limit,
-    });
-
   const emptyMessage = !hasCards ? t('no_cards_yet')
     : (overview.new_done + overview.review_done > 0 ? t('caught_up') : t('nothing_due'));
 
   $content().innerHTML = `
     <div class="page">
       <div class="page-head">
-        <h1>${esc(title)}</h1>
-        <span class="sub small">${overview.total_cards} ${esc(t(overview.total_cards === 1 ? 'card' : 'cards'))}</span>
+        <div class="kicker">${esc(t('to_study'))}</div>
+        <h1>${esc(title)}
+          <span class="count">${overview.total_cards} ${
+            esc(t(overview.total_cards === 1 ? 'card' : 'cards'))}</span></h1>
       </div>
 
       <div class="home-grid">
-      <div class="card due-card">
-        ${total > 0 ? `
-          <div class="due-figures">
-            <div class="due-figure ${newCount ? '' : 'zero'}">
-              <span class="value">${newCount}</span>
-              <span class="label">${esc(t('new_cards'))}</span>
-            </div>
-            <div class="due-figure ${reviewCount ? '' : 'zero'}">
-              <span class="value">${reviewCount}</span>
-              <span class="label">${esc(t('review_cards'))}</span>
-            </div>
-          </div>` : `
-          <div class="due-figures">
-            <div class="due-figure zero">
-              <span class="value" style="font-size:17px;font-weight:500">${esc(emptyMessage)}</span>
-            </div>
-          </div>`}
+        <div class="card hero-card">
+          ${total > 0 ? `
+            <div class="hero-figures">
+              <span class="hero-value">${total}</span>
+              <span class="hero-lines">
+                <span class="${newCount ? '' : 'zero'}">${newCount} ${esc(t('new_cards'))}</span>
+                <span class="${reviewCount ? '' : 'zero'}">${reviewCount} ${esc(t('review_cards'))}</span>
+              </span>
+            </div>` : `
+            <div class="hero-figures"><span class="hero-done">${esc(emptyMessage)}</span></div>`}
 
-        <div class="due-actions">
-          <button class="btn btn-primary" data-action="startSession" ${total ? '' : 'disabled'}>
-            ${esc(t('study'))}
-          </button>
-          <button class="btn btn-secondary" data-action="startBrowse" ${hasCards ? '' : 'disabled'}>
-            ${esc(t('browse'))}
-          </button>
+          <div class="hero-actions">
+            <button class="btn btn-primary btn-lg" data-action="startSession" ${total ? '' : 'disabled'}>
+              ${esc(t('study'))}
+            </button>
+            <button class="btn btn-secondary btn-lg" data-action="startBrowse" ${hasCards ? '' : 'disabled'}>
+              ${esc(t('browse'))}
+            </button>
+          </div>
         </div>
 
-        <div class="limit-line">${esc(limitLine)}</div>
-
-        ${overview.overdue ? `
-          <div class="backlog-note">
-            <span>${esc(t('overdue_note', { n: overview.overdue }))}</span>
-            <button class="btn-text" data-action="openSpread"
-                    data-n="${overview.overdue}">${esc(t('reschedule'))}</button>
-          </div>` : ''}
-      </div>
-
-        <div class="card card-pad heat-card">
-          <div class="section-label">${esc(t('review_activity'))}</div>
+        <div class="card card-pad activity-card">
+          <div class="card-title">${esc(t('review_activity'))}
+            <span class="meta">${esc(t('heat_total', { n: heat.total || 0 }))}</span></div>
           ${heatmapHtml(heat)}
+          ${hasCards ? `<div class="rule-top">${
+            statesHtml(overview.states, overview.total_cards)}</div>` : ''}
         </div>
 
-        ${hasCards ? `
-          <div class="card card-pad states-card">
-            <div class="section-label">${esc(t('total_cards'))}</div>
-            ${statesHtml(overview.states, overview.total_cards)}
-          </div>` : ''}
+        ${subjectCardsHtml()}
       </div>
     </div>`;
 }
 
-/* How the deck is distributed across the three FSRS states. */
+/* One card per subject, listing the chapters under it. The deck tree in the
+   sidebar answers "where am I"; this answers "what is in there". */
+function subjectCardsHtml() {
+  const subjects = S.decks.filter((deck) => deck.depth === 0);
+  if (!subjects.length) return '';
+
+  const cards = subjects.map((subject) => {
+    const children = S.decks.filter((deck) =>
+      deck.depth === 1 && deck.path.startsWith(subject.path + '::'));
+    const rows = (children.length ? children : [subject]).map((deck) => {
+      const due = deck.due_count + deck.new_count;
+      return `
+        <div class="chapter-row" data-action="selectDeck" data-deck="${attr(deck.path)}">
+          <span class="chapter-name">${esc(deck.name)}</span>
+          ${due
+            ? `<span class="chip chip-count">${due}</span>`
+            : `<span class="chapter-total">${deck.total}</span>`}
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="card subject-card">
+        <div class="card-title">${esc(subject.name)}
+          <span class="meta">${subject.total} ${
+            esc(t(subject.total === 1 ? 'card' : 'cards'))}</span></div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  return `<div class="subject-grid">${cards}</div>`;
+}
+
+/* How the deck is distributed across the three FSRS states. One ramp, light to
+   dark, so the three read as stages of the same thing rather than three
+   colours competing for attention. */
 function statesHtml(states, total) {
   const rows = [
-    ['state_new', states.new, 'var(--heat-3)'],
-    ['state_learning', states.learning, 'var(--orange)'],
-    ['state_review', states.review, 'var(--green)'],
+    ['state_new', states.new, 'var(--ramp-2)'],
+    ['state_learning', states.learning, 'var(--ramp-4)'],
+    ['state_review', states.review, 'var(--ramp-5)'],
   ];
   return rows.map(([key, value, colour]) => `
     <div class="bar-row">
@@ -182,8 +193,6 @@ function heatmapHtml(heat) {
       <span>${esc(t('heat_less'))}</span>
       ${[0, 1, 2, 3, 4, 5].map((l) => `<span class="heat-cell" data-level="${l}"></span>`).join('')}
       <span>${esc(t('heat_more'))}</span>
-      <span class="grow"></span>
-      <span>${esc(t('heat_total', { n: heat.total }))}</span>
     </div>`;
 }
 
@@ -192,28 +201,4 @@ function heatmapHtml(heat) {
 export const actions = {
   startSession: () => navigate('review'),
   startBrowse: () => navigate('browse'),
-
-  openSpread: (el) => {
-    const n = Number(el.dataset.n) || 0;
-    showModal(`
-      <h2>${esc(t('reschedule_title'))}</h2>
-      <p class="sub" style="font-size:13.5px;line-height:1.6">${esc(t('reschedule_body', { n }))}</p>
-      <div class="field mt16">
-        <label class="field-label">${esc(t('reschedule_days'))}</label>
-        <input class="input input-inline" id="spread-days" type="number" min="1" max="60" value="7">
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary btn-sm" data-action="closeModal">${esc(t('cancel'))}</button>
-        <button class="btn btn-primary btn-sm" data-action="confirmSpread">${esc(t('reschedule'))}</button>
-      </div>`);
-  },
-
-  confirmSpread: async () => {
-    const days = Number(document.getElementById('spread-days').value) || 7;
-    closeModal();
-    const result = await api.spread_overdue(S.deck, days);
-    if (result.error) return showToast(result.error, 3200);
-    showToast(t('reschedule_done', { n: result.moved, days: result.days }));
-    await render();
-  },
 };

@@ -106,10 +106,6 @@ class Api:
     def undo_review(self):
         return self.ctx.study.undo()
 
-    @api_call
-    def spread_overdue(self, deck="", days=7):
-        return self.ctx.study.spread_overdue(deck, int(days))
-
     # ── Cards ─────────────────────────────────────────────────────────────
 
     @api_call

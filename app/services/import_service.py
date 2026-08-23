@@ -164,7 +164,7 @@ class ImportService:
             if qtype not in KNOWN_QUESTION_TYPES:
                 issues.append(Issue(
                     "warning", where,
-                    f"Unknown question type '{qtype or '(missing)'}' — skipped"))
+                    f"Unknown question type '{qtype or '(missing)'}', skipped"))
                 continue
             problem = self._validate_question(qtype, entry)
             if problem:

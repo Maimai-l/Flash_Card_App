@@ -42,7 +42,11 @@ Both shapes may appear in the same object.
 **Required:** `front`, `back`, and a deck (either per card or at the top level).
 
 **Decks** are a tree written with `::`. `Mathematics::Linear Algebra::Eigenvalues`
-creates all three levels. Daily limits belong to the top level — the subject.
+creates all three levels. Daily limits belong to the top level, the subject, so
+that level must be the name of the course: `Mathematics`, not `9709`; `Computer
+Science`, not `9618`. A syllabus code goes in `tags`, where it is searchable and
+does not split one course into two budgets. The Import page's *Copy deck names*
+button lists the paths that already exist.
 
 **`id`** makes an import repeatable. A card with an `id` that already exists is
 updated in place rather than duplicated, so you can hand a deck back to an LLM,

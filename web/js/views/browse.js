@@ -5,13 +5,10 @@
 
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
-import { $content, esc, attr, setKeys, typingInInput } from '../core/dom.js';
+import { $content, esc, setKeys, typingInInput } from '../core/dom.js';
 import { flashcardHtml, setFlipped } from './flashcard.js';
 import { t } from '../core/i18n.js';
 import { navigate } from '../core/router.js';
-
-const CLOSE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-  stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 
 export async function renderBrowse() {
   if (!S.browse) {
@@ -34,7 +31,7 @@ function paint() {
     $content().innerHTML = `
       <div class="study">
         <div class="study-top">
-          <button class="icon-btn" data-action="exitBrowse">${CLOSE_ICON}</button>
+          <button class="btn btn-secondary btn-sm" data-action="exitBrowse">${esc(t('exit_session'))}</button>
           <span class="title">${esc(deckLabel)}</span>
         </div>
         <div class="study-body"><div class="study-inner">
@@ -49,26 +46,22 @@ function paint() {
   $content().innerHTML = `
     <div class="study">
       <div class="study-top">
-        <button class="icon-btn" data-action="exitBrowse"
-                title="${attr(t('exit_session'))}">${CLOSE_ICON}</button>
-        <span class="title">${esc(deckLabel)} — ${esc(t('browse'))}</span>
+        <button class="btn btn-secondary btn-sm" data-action="exitBrowse">${esc(t('exit_session'))}</button>
+        <span class="title">${esc(deckLabel)}</span>
         <span class="counter">${state.index + 1} / ${state.cards.length}</span>
       </div>
       <div class="study-body"><div class="study-inner">
         ${flashcardHtml(card, { flipped: state.revealed, hintShown: true })}
       </div></div>
-      <div class="study-foot"><div class="study-foot-inner">
-        <div class="reveal-row">
-          <button class="btn btn-secondary btn-sm" data-action="browseStep" data-dir="-1"
-                  ${state.index === 0 ? 'disabled' : ''}>${esc(t('prev'))}</button>
-          <button class="btn btn-primary btn-sm" data-action="browseToggle">
-            ${esc(state.revealed ? t('front') : t('show_answer'))}
-          </button>
-          <button class="btn btn-secondary btn-sm" data-action="browseStep" data-dir="1"
-                  ${state.index >= state.cards.length - 1 ? 'disabled' : ''}>${esc(t('next'))}</button>
-        </div>
-        <div class="hint-line">${esc(t('browse_title'))}</div>
-      </div></div>
+      <div class="study-foot">
+        <button class="btn btn-secondary" data-action="browseStep" data-dir="-1"
+                ${state.index === 0 ? 'disabled' : ''}>${esc(t('prev'))}</button>
+        <button class="btn btn-primary" data-action="browseToggle">
+          ${esc(state.revealed ? t('front') : t('show_answer'))}
+        </button>
+        <button class="btn btn-secondary" data-action="browseStep" data-dir="1"
+                ${state.index >= state.cards.length - 1 ? 'disabled' : ''}>${esc(t('next'))}</button>
+      </div>
     </div>`;
 
   setKeys(onKey);

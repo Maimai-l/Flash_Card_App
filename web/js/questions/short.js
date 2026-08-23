@@ -1,7 +1,6 @@
 /* Short answer, graded against the list of accepted answers in the JSON. */
 
 import { esc } from '../core/dom.js';
-import { rich } from '../core/render.js';
 import { t } from '../core/i18n.js';
 import { matchesAny } from './util.js';
 
@@ -16,18 +15,15 @@ const short = {
     const accepted = (question.answers || []).filter(Boolean);
     const ok = state.answered && matchesAny(given, accepted, question.match || 'loose');
 
-    return `
-      <div class="q-prompt">${rich(question.prompt)}</div>
-      ${state.answered ? `
-        <div class="opt ${ok ? 'correct' : 'wrong'} locked">
-          <span class="opt-body">${esc(given || '—')}</span>
-          <span class="opt-mark">${ok ? '✓' : '✗'}</span>
-        </div>
-        ${ok ? '' : `<div class="mt8 sub small">${esc(t('correct_answer'))}: <b
-          style="color:var(--text);font-weight:500">${esc(accepted[0] || '')}</b></div>`}
-      ` : `
-        <input class="input" id="short-input" autocomplete="off" spellcheck="false"
-               placeholder="${esc(t('type_answer'))}" value="${esc(given)}">`}`;
+    return state.answered
+      ? `<div class="opt ${ok ? 'correct' : 'wrong'} locked">
+           <span class="opt-body">${esc(given || t('blank'))}</span>
+           <span class="opt-mark">${ok ? '✓' : '✗'}</span>
+         </div>`
+      : `<div class="q-card">
+           <input class="short-input" id="short-input" autocomplete="off" spellcheck="false"
+                  placeholder="${esc(t('type_answer'))}" value="${esc(given)}">
+         </div>`;
   },
 
   mount(root, question, state, ctx) {
@@ -56,7 +52,7 @@ const short = {
 
   summary(question, response) {
     return {
-      given: String(response || '—'),
+      given: String(response || t('blank')),
       correct: (question.answers || [])[0] || '',
     };
   },

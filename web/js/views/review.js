@@ -1,10 +1,10 @@
 /* The review session.
 
    One card at a time: front, then back, then a rating. The four buttons are the
-   only judgement in the app — a flashcard has no machine-checkable answer, so
+   only judgement in the app: a flashcard has no machine-checkable answer, so
    you grade it. Quizzes, which do have answers, grade themselves elsewhere.
 
-   Keyboard first: Space reveals, 1–4 rate, E edits the card in place, Z undoes
+   Keyboard first: Space reveals, 1 to 4 rate, E edits the card in place, Z undoes
    the last rating, Esc leaves. Leaving mid-session loses nothing: every answer
    was already written when you pressed the key. */
 
@@ -14,9 +14,6 @@ import { $content, esc, attr, showToast, setKeys, typingInInput, showModal, clos
 import { flashcardHtml, setFlipped } from './flashcard.js';
 import { t } from '../core/i18n.js';
 import { navigate } from '../core/router.js';
-
-const CLOSE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-  stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 
 const RATINGS = [
   { value: 1, key: 'again' },
@@ -60,22 +57,29 @@ function progress() {
   return { done: session.answers, total: session.answers + remaining };
 }
 
-function shell(inner, { counter = '', foot = null } = {}) {
+function shell(inner, { counter = '', foot = null, controls = '' } = {}) {
   const deckLabel = S.deck ? S.deck.split('::').pop() : t('all_decks');
   return `
     <div class="study">
       <div class="study-top">
-        <button class="icon-btn" data-action="exitSession"
-                title="${attr(t('exit_session'))}">${CLOSE_ICON}</button>
+        <button class="btn btn-secondary btn-sm" data-action="exitSession">${esc(t('exit_session'))}</button>
         <span class="title">${esc(deckLabel)}</span>
         <span class="counter">${esc(counter)}</span>
+        ${controls}
       </div>
       <div class="study-body"><div class="study-inner">${inner}</div></div>
-      ${foot === null ? '' : `
-        <div class="study-foot">
-          <div class="study-foot-inner" id="study-foot">${foot}</div>
-        </div>`}
+      ${foot === null ? '' : `<div class="study-foot" id="study-foot">${foot}</div>`}
     </div>`;
+}
+
+/* Undo and Edit sit in the top bar with their keys printed on them, rather than
+   in a line of legend under the card. The shortcut belongs on the control. */
+function controlsHtml() {
+  return `
+    <button class="btn btn-secondary btn-sm" data-action="undo">${
+      esc(t('undo'))}<span class="kbd">Z</span></button>
+    <button class="btn btn-secondary btn-sm" data-action="editCard">${
+      esc(t('edit'))}<span class="kbd">E</span></button>`;
 }
 
 function paint() {
@@ -87,7 +91,7 @@ function paint() {
 
   $content().innerHTML = shell(
     flashcardHtml(card, { flipped: session.revealed, hintShown: session.hintShown }),
-    { counter: `${done} / ${total}`, foot: footHtml() },
+    { counter: `${done} / ${total}`, foot: footHtml(), controls: controlsHtml() },
   );
   setKeys(onKey);
 }
@@ -98,23 +102,16 @@ function footHtml() {
   const card = session.current;
   if (!session.revealed) {
     return `
-      <div class="reveal-row">
-        <button class="btn btn-primary btn-lg" data-action="reveal">${esc(t('show_answer'))}</button>
-      </div>
-      <div class="hint-line"><kbd>Space</kbd></div>`;
+      <button class="btn btn-primary btn-lg" data-action="reveal">${esc(t('show_answer'))}</button>
+      <span class="kbd">Space</span>`;
   }
   return `
     <div class="rating-row">
       ${RATINGS.map(({ value, key }) => `
-        <button class="rating-btn" data-action="rate" data-rating="${value}">
+        <button class="rating-btn ${value === 3 ? 'main' : ''}" data-action="rate" data-rating="${value}">
           <span class="label">${esc(t(key))}</span>
           <span class="interval">${esc((card.intervals || {})[value] || '')}</span>
         </button>`).join('')}
-    </div>
-    <div class="hint-line">
-      <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> ${esc(t('keys_rate'))}
-      &nbsp;·&nbsp; <kbd>E</kbd> ${esc(t('key_edit'))}
-      &nbsp;·&nbsp; <kbd>Z</kbd> ${esc(t('key_undo'))}
     </div>`;
 }
 
@@ -125,31 +122,25 @@ function paintFoot() {
 
 function paintSummary() {
   const session = S.session;
-  const breakdown = RATINGS
+  const counts = RATINGS
     .filter(({ value }) => session.counts[value] > 0)
     .map(({ value, key }) => `
-      <div class="bar-row">
-        <span class="bar-label">${esc(t(key))}</span>
-        <span class="bar-track"><span class="bar-fill" style="width:${
-          Math.round(100 * session.counts[value] / Math.max(1, session.answers))}%"></span></span>
-        <span class="bar-value">${session.counts[value]}</span>
-      </div>`).join('');
+      <span class="count-chip"><span class="k">${esc(t(key))}</span
+        ><span class="v">${session.counts[value]}</span></span>`).join('');
 
   $content().innerHTML = shell(`
-    <div class="result-hero">
-      <div class="result-score">${session.seen.size}</div>
-      <div class="result-sub">${esc(t('session_summary', {
+    <div class="session-done">
+      <span class="title">${esc(t('session_done'))}</span>
+      <span class="summary">${esc(t('session_summary', {
         cards: session.seen.size, answers: session.answers,
-      }))}</div>
-    </div>
-    ${breakdown ? `<div class="card card-pad mb16">${breakdown}</div>` : ''}
-    <div class="center sub small mb16">${esc(t('caught_up'))}</div>
-    <div class="due-actions">
-      <button class="btn btn-primary" data-action="exitSession">${esc(t('done'))}</button>
-      <button class="btn btn-secondary" data-action="studyMore">${esc(t('study_more'))}</button>
-    </div>
-    <div class="center faint small mt16">${esc(t('study_more_note'))}</div>`,
-  { counter: `${t('session_done')}` });
+      }))}</span>
+      ${counts ? `<div class="session-counts">${counts}</div>` : ''}
+      <div class="actions">
+        <button class="btn btn-primary" data-action="exitSession">${esc(t('done'))}</button>
+        <button class="btn btn-secondary" data-action="studyMore">${esc(t('study_more'))}</button>
+      </div>
+      <span class="note">${esc(t('study_more_note'))}</span>
+    </div>`);
 
   setKeys((event) => {
     if (event.key === 'Escape' || event.key === 'Enter') {

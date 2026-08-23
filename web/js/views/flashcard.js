@@ -1,4 +1,4 @@
-/* The card itself — a real surface that turns over, shared by Review and Browse.
+/* The card itself: a real surface that turns over, shared by Review and Browse.
 
    Both faces are always in the DOM, stacked in one grid cell, so the card keeps
    a single height and the flip has something to turn to. Revealing toggles a
@@ -8,34 +8,40 @@ import { esc } from '../core/dom.js';
 import { richBlock } from '../core/render.js';
 import { t } from '../core/i18n.js';
 
-export function flashcardHtml(card, { flipped = false, hintShown = false } = {}) {
-  const tags = (card.tags || []).length
-    ? `<div class="card-tags">${card.tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}</div>`
-    : '';
+function head(card) {
+  const tags = (card.tags || []).map((tag) => '#' + tag).join('  ');
+  return `
+    <div class="face-head">
+      <span class="chip ${card.is_new ? 'chip-new' : 'chip-review'}">${
+        esc(t(card.is_new ? 'state_new' : 'state_review'))}</span>
+      <span class="card-tags">${esc(tags)}</span>
+    </div>`;
+}
 
+export function flashcardHtml(card, { flipped = false, hintShown = false } = {}) {
   const hint = card.hint
     ? (hintShown
-      ? `<div class="card-hint">${esc(card.hint)}</div>`
-      : `<button class="btn-text card-hint-btn" data-action="showHint">${esc(t('hint'))}</button>`)
+      ? `<span class="card-hint">${esc(card.hint)}</span>`
+      : `<button class="btn btn-quiet btn-sm" data-action="showHint">${
+          esc(t('hint'))}<span class="kbd">H</span></button>`)
     : '';
 
   return `
     <div class="flashcard">
       <div class="flashcard-inner${flipped ? ' flipped' : ''}" id="flashcard-inner">
         <div class="flashcard-face">
-          <div class="face-label">${esc(t('front'))}</div>
+          ${head(card)}
           <div class="face-body">${richBlock(card.front, 'card-front')}</div>
-          ${hint}
+          <div class="face-foot">${hint}</div>
         </div>
         <div class="flashcard-face back">
-          <div class="face-label">${esc(t('back'))}</div>
-          <div class="face-body">
+          ${head(card)}
+          <div class="face-body answer">
             <!-- The question stays in view: you cannot grade your recall
                  honestly against an answer whose prompt has turned away. -->
             <div class="face-echo">${richBlock(card.front)}</div>
             ${richBlock(card.back, 'card-back')}
           </div>
-          ${tags}
         </div>
       </div>
     </div>`;

@@ -1,4 +1,7 @@
-/* UI strings. Card and quiz content is never translated — only the chrome. */
+/* UI strings. Card and quiz content is never translated; only the chrome.
+
+   No em dashes anywhere in here. They read as filler in an interface, and in
+   Chinese they are simply the wrong punctuation. */
 
 import { S } from './state.js';
 
@@ -14,15 +17,8 @@ const en = {
 
   due_today: 'Due today', new_cards: 'new', review_cards: 'review',
   study: 'Study', browse: 'Browse', cards: 'cards', card: 'card',
-  limit_line: 'Daily limit {new} new · {review} review',
-  limit_unlimited: 'no limit',
-  limit_per_subject: 'Each subject keeps its own daily limit',
-  heat_total: '{n} reviews in the last 6 months',
-  overdue_note: '{n} overdue', reschedule: 'Spread out',
-  reschedule_title: 'Spread the backlog',
-  reschedule_body: 'Move {n} overdue cards evenly across the next few days so they stop arriving all at once.',
-  reschedule_days: 'Days to spread over',
-  reschedule_done: 'Moved {n} cards across {days} days',
+  to_study: 'To study today',
+  heat_total: '{n} reviews, 6 months',
   nothing_due: 'Nothing due right now.',
   no_cards_yet: 'No cards yet. Import some to get started.',
   caught_up: 'Done for today.',
@@ -31,13 +27,13 @@ const en = {
 
   show_answer: 'Show answer', hint: 'Hint',
   again: 'Again', hard: 'Hard', good: 'Good', easy: 'Easy',
-  keys_rate: 'to rate', keys_answer: 'to answer', key_edit: 'edit', key_undo: 'undo',
+  undo: 'Undo', blank: 'blank',
+  is_correct: 'Correct', is_wrong: 'Not quite',
   session_done: 'Session finished',
-  session_summary: '{cards} cards · {answers} answers',
+  session_summary: '{cards} reviewed · {answers} answered',
   undo_nothing: 'Nothing to undo',
   undone: 'Review undone',
   exit_session: 'Exit',
-  browse_title: 'Browsing — nothing is scheduled here',
   browse_empty: 'This deck has no cards.',
   prev: 'Previous', next: 'Next',
 
@@ -46,7 +42,7 @@ const en = {
   never_taken: 'never taken', last_result: 'last {correct}/{total} · {when}',
   start: 'Start', retry_wrong: 'Retry wrong ({n})',
   resume: 'Resume', start_over: 'Start over',
-  in_progress: 'in progress — {done} of {total} answered',
+  in_progress: '{done} of {total} answered',
   start_over_confirm: 'Discard the answers you have already given and begin again?',
   progress_saved: 'Progress saved',
   no_quizzes: 'No quizzes yet. Import one to get started.',
@@ -66,7 +62,9 @@ const en = {
   front_back_required: 'A card needs both a front and a back.',
 
   import_title: 'Import', paste_json: 'Paste JSON',
-  copy_schema: 'Copy schema for LLM', schema_copied: 'Schema copied to clipboard',
+  copy_decks: 'Copy deck names', decks_copied: '{n} deck names copied',
+  copy_decks_desc: 'Hand these to whatever writes the JSON so the "deck" field matches a deck you already have.',
+  no_decks_to_copy: 'There are no decks yet.',
   target_deck: 'Target deck', from_json: 'From the JSON',
   validate: 'Validate', import_now: 'Import',
   import_new: 'new', import_updated: 'updated', import_duplicates: 'already there',
@@ -94,7 +92,7 @@ const en = {
   daily_limits: 'Daily limits',
   default_new_limit: 'New cards per day',
   default_review_limit: 'Reviews per day',
-  limits_desc: 'Applies to every subject that has no limit of its own. −1 means no limit.',
+  limits_desc: 'Applies to every subject that has no limit of its own. Enter -1 for no limit.',
   per_deck_limits: 'Per-subject limits',
   per_deck_desc: 'Top-level decks only. Leave blank to use the defaults.',
   data: 'Data', reset_all: 'Delete everything',
@@ -118,15 +116,8 @@ const zh = {
 
   due_today: '今日待学', new_cards: '新卡', review_cards: '复习',
   study: '开始学习', browse: '浏览', cards: '张卡片', card: '张卡片',
-  limit_line: '每日上限 {new} 新卡 · {review} 复习',
-  limit_unlimited: '不限',
-  limit_per_subject: '每个学科各自计算每日上限',
-  heat_total: '近半年共 {n} 次复习',
-  overdue_note: '{n} 张已逾期', reschedule: '分摊到几天',
-  reschedule_title: '分摊积压',
-  reschedule_body: '把 {n} 张逾期卡片平均分到接下来的几天，避免一次全压过来。',
-  reschedule_days: '分摊天数',
-  reschedule_done: '已把 {n} 张卡片分摊到 {days} 天',
+  to_study: '今日待学',
+  heat_total: '近半年 {n} 次复习',
   nothing_due: '当前没有到期的卡片。',
   no_cards_yet: '还没有卡片，先导入一些吧。',
   caught_up: '今天的份额已完成。',
@@ -135,13 +126,13 @@ const zh = {
 
   show_answer: '显示答案', hint: '提示',
   again: '重来', hard: '困难', good: '良好', easy: '简单',
-  keys_rate: '评分', keys_answer: '作答', key_edit: '编辑', key_undo: '撤销',
+  undo: '撤销', blank: '未填',
+  is_correct: '正确', is_wrong: '不对',
   session_done: '本轮结束',
-  session_summary: '{cards} 张卡片 · {answers} 次作答',
+  session_summary: '复习 {cards} 张 · 作答 {answers} 次',
   undo_nothing: '没有可撤销的记录',
   undone: '已撤销上一次评分',
   exit_session: '退出',
-  browse_title: '浏览模式 — 不影响任何复习安排',
   browse_empty: '这个卡组还没有卡片。',
   prev: '上一张', next: '下一张',
 
@@ -150,7 +141,7 @@ const zh = {
   never_taken: '未做过', last_result: '上次 {correct}/{total} · {when}',
   start: '开始', retry_wrong: '只做错题（{n}）',
   resume: '继续', start_over: '重新开始',
-  in_progress: '进行中 — 已答 {done} / {total}',
+  in_progress: '已答 {done} / {total}',
   start_over_confirm: '放弃已经作答的部分，从头开始？',
   progress_saved: '进度已保存',
   no_quizzes: '还没有测验，先导入一份吧。',
@@ -170,7 +161,9 @@ const zh = {
   front_back_required: '正面和背面都不能为空。',
 
   import_title: '导入', paste_json: '粘贴 JSON',
-  copy_schema: '复制 schema 给 LLM', schema_copied: 'schema 已复制到剪贴板',
+  copy_decks: '复制卡组名', decks_copied: '已复制 {n} 个卡组名',
+  copy_decks_desc: '把这些交给写 JSON 的一方，"deck" 字段就会落在已有的卡组上。',
+  no_decks_to_copy: '还没有卡组。',
   target_deck: '目标卡组', from_json: '按 JSON 里写的',
   validate: '校验', import_now: '导入',
   import_new: '新增', import_updated: '更新', import_duplicates: '已存在',
@@ -198,7 +191,7 @@ const zh = {
   daily_limits: '每日上限',
   default_new_limit: '每天新卡',
   default_review_limit: '每天复习',
-  limits_desc: '适用于没有单独设置上限的学科。填 −1 表示不限。',
+  limits_desc: '适用于没有单独设置上限的学科，填 -1 表示不限。',
   per_deck_limits: '各学科上限',
   per_deck_desc: '仅顶层卡组。留空则使用默认值。',
   data: '数据', reset_all: '清空所有数据',

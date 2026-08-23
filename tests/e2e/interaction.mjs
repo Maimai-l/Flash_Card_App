@@ -67,19 +67,22 @@ page.on('console', (message) => { if (message.type() === 'error') consoleErrors.
 page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
 
 await page.goto(`${BASE}/index.html`, { waitUntil: 'networkidle' });
-await page.waitForSelector('.due-card');
+await page.waitForSelector('.hero-card');
 
 // ── Home ──────────────────────────────────────────────────────────────────
 check('deck tree lists both subjects',
   await page.locator('.deck-item:has-text("Mathematics")').count() === 1
   && await page.locator('.deck-item:has-text("Computer Science")').count() === 1);
 check('all four cards are offered',
-  (await page.locator('.due-figure .value').first().textContent()).trim() === '4');
-check('limits are described as per-subject, not summed',
-  (await page.locator('.limit-line').textContent()).includes('Each subject'));
+  (await page.locator('.hero-value').textContent()).trim() === '4');
 check('the state breakdown actually paints its bars',
-  await page.locator('.states-card .bar-fill').first().evaluate((el) =>
+  await page.locator('.activity-card .bar-fill').first().evaluate((el) =>
     el.getBoundingClientRect().width) > 0);
+// The two ways into a deck belong with the number they act on, not floating in
+// the top-right corner of the window.
+check('Study and Browse sit inside the first card',
+  await page.locator('.hero-card [data-action="startSession"]').count() === 1
+  && await page.locator('.hero-card [data-action="startBrowse"]').count() === 1);
 
 // ── Review ────────────────────────────────────────────────────────────────
 await page.click('.deck-item:has-text("Linear Algebra")');
@@ -118,22 +121,22 @@ check('inline edit is visible immediately',
   (await page.locator('.card-back').textContent()).includes('Edited during review'));
 
 for (let i = 0; i < 60; i++) {
-  if (await page.locator('.result-score').count()) break;
+  if (await page.locator('.session-done').count()) break;
   if (await page.locator('.rating-btn').count()) await page.keyboard.press('3');
   else if (await page.locator('button:has-text("Show answer")').count()) await page.keyboard.press(' ');
   await page.waitForTimeout(180);
 }
-check('the session reaches a summary', await page.locator('.result-score').count() === 1);
+check('the session reaches a summary', await page.locator('.session-done').count() === 1);
 check('summary offers more study without obligation',
   await page.locator('button:has-text("Study more")').count() === 1);
 await page.click('button:has-text("Done")');
-await page.waitForSelector('.due-card');
+await page.waitForSelector('.hero-card');
 
 // ── Quiz ──────────────────────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Quiz")');
-await page.waitForSelector('.quiz-row-name');
+await page.waitForSelector('.quiz-name');
 check('quiz says it has never been taken',
-  (await page.locator('.quiz-row-meta').first().textContent()).includes('never taken'));
+  (await page.locator('.quiz-meta').first().textContent()).includes('never taken'));
 
 await page.click('button:has-text("Start")');
 await page.waitForSelector('.opt');
@@ -173,9 +176,9 @@ check('results show a score out of four',
 check('wrong answers can be retried alone',
   await page.locator('button:has-text("Retry wrong")').count() === 1);
 await page.click('button:has-text("Done")');
-await page.waitForSelector('.quiz-row-name');
+await page.waitForSelector('.quiz-name');
 check('the attempt is recorded',
-  !(await page.locator('.quiz-row-meta').first().textContent()).includes('never taken'));
+  !(await page.locator('.quiz-meta').first().textContent()).includes('never taken'));
 
 // ── A quiz left half-finished ─────────────────────────────────────────────
 // Card reviews write on every rating; quizzes used to hold the run in the tab,
@@ -187,9 +190,9 @@ await page.waitForTimeout(250);
 await page.keyboard.press('Enter');
 await page.waitForTimeout(250);
 await page.keyboard.press('Escape');
-await page.waitForSelector('.quiz-row-name');
+await page.waitForSelector('.quiz-name');
 check('the list shows a half-finished run',
-  (await page.locator('.quiz-row-meta').first().textContent()).includes('in progress'));
+  await page.locator('.quiz-card [data-fresh="1"]').count() === 1);
 
 await page.click('button:has-text("Resume")');
 await page.waitForSelector('.q-card');
@@ -199,14 +202,14 @@ check('resuming lands where it stopped',
 // and it is on the server, not in the tab
 await page.goto(`${BASE}/index.html`, { waitUntil: 'networkidle' });
 await page.click('.nav-link:has-text("Quiz")');
-await page.waitForSelector('.quiz-row-name');
+await page.waitForSelector('.quiz-name');
 await page.click('button:has-text("Resume")');
 await page.waitForSelector('.q-card');
 check('the run survives a full page reload',
   (await page.locator('.counter').textContent()).trim().startsWith('2'));
 
 await page.keyboard.press('Escape');
-await page.waitForSelector('.quiz-row-name');
+await page.waitForSelector('.quiz-name');
 await page.click('button:has-text("Start over")');
 await page.waitForSelector('.modal');
 await page.click('.modal .btn-danger');
@@ -215,18 +218,18 @@ check('starting over rewinds to the first question',
   (await page.locator('.counter').textContent()).trim().startsWith('1'));
 // Leaving a run in which nothing has been graded yet leaves nothing behind.
 await page.keyboard.press('Escape');
-await page.waitForSelector('.quiz-row-name');
+await page.waitForSelector('.quiz-name');
 check('an untouched run does not linger in the list',
-  !(await page.locator('.quiz-row-meta').first().textContent()).includes('in progress'));
+  await page.locator('.quiz-card [data-fresh="1"]').count() === 0);
 
 // ── Cards ─────────────────────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Cards")');
-await page.waitForSelector('.card-table');
-const rows = await page.locator('.card-table tbody tr').count();
+await page.waitForSelector('.card-row');
+const rows = await page.locator('.card-row').count();
 check('the table lists the deck', rows === 3);
 await page.fill('#card-search', 'basis');
 await page.waitForTimeout(500);
-check('search narrows the table', await page.locator('.card-table tbody tr').count() === 1);
+check('search narrows the table', await page.locator('.card-row').count() === 1);
 await page.fill('#card-search', '');
 await page.waitForTimeout(500);
 
@@ -237,7 +240,7 @@ await page.fill('#card-back', 'It saved');
 await page.click('.modal button:has-text("Save")');
 await page.waitForTimeout(600);
 check('a new card appears in the table',
-  await page.locator('.card-table tbody tr').count() === rows + 1);
+  await page.locator('.card-row').count() === rows + 1);
 
 // ── Import ────────────────────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Import")');
@@ -264,23 +267,25 @@ check('importing writes only the good card',
 await page.click('.nav-link:has-text("Stats")');
 await page.waitForSelector('.stat-grid');
 check('stats report the reviews just made',
-  Number((await page.locator('.stat-tile .value').nth(1).textContent()).trim()) > 0);
+  Number((await page.locator('.stat-value').nth(1).textContent()).trim()) > 0);
 
 // ── Settings and language ─────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Settings")');
 await page.waitForSelector('.setting-row');
 check('each subject can carry its own limits',
   await page.locator('[data-change="setDeckLimit"]').count() >= 4);
-await page.selectOption('select[data-change="setLanguage"]', 'zh');
+await page.click('[data-action="setLanguage"][data-lang="zh"]');
 await page.waitForTimeout(600);
 check('the interface switches to Chinese',
   (await page.locator('#brand').textContent()).trim() === '知识卡片');
-await page.selectOption('select[data-change="setLanguage"]', 'en');
+check('the document declares the language it is showing',
+  await page.evaluate(() => document.documentElement.dataset.lang) === 'zh');
+await page.click('[data-action="setLanguage"][data-lang="en"]');
 await page.waitForTimeout(600);
 
 // ── Browse leaves the schedule alone ──────────────────────────────────────
 await page.click('.nav-link:has-text("Home")');
-await page.waitForSelector('.due-card');
+await page.waitForSelector('.hero-card');
 const beforeBrowse = JSON.stringify(await call('get_overview', ['']));
 await page.click('button:has-text("Browse")');
 await page.waitForSelector('.card-front');
@@ -288,7 +293,7 @@ await page.keyboard.press(' ');
 await page.keyboard.press('ArrowRight');
 await page.waitForTimeout(300);
 await page.keyboard.press('Escape');
-await page.waitForSelector('.due-card');
+await page.waitForSelector('.hero-card');
 check('browsing changes nothing', JSON.stringify(await call('get_overview', [''])) === beforeBrowse);
 
 // ── Chrome alignment ──────────────────────────────────────────────────────
@@ -346,12 +351,12 @@ check('Settings lists its own sections, not decks',
   settingsPanel.includes('Daily limits') && !settingsPanel.includes('All decks'));
 
 await page.click('.nav-link:has-text("Quiz")');
-await page.waitForSelector('.quiz-row-name');
+await page.waitForSelector('.quiz-name');
 check('Quiz lists subjects, not decks',
   (await page.locator('#sidebar').textContent()).includes('All quizzes'));
 
 await page.click('.nav-link:has-text("Home")');
-await page.waitForSelector('.due-card');
+await page.waitForSelector('.hero-card');
 check('a deck-scoped page still lists decks',
   (await page.locator('#sidebar').textContent()).includes('All decks'));
 
@@ -362,12 +367,12 @@ await call('import_commit', [JSON.stringify({
     id: `bulk.${i}`, front: `What is bulk term ${i}?`, back: `Answer ${i}.` })),
 })]);
 await page.click('.nav-link:has-text("Cards")');
-await page.waitForSelector('.card-table');
+await page.waitForSelector('.card-row');
 // An earlier step scoped the sidebar to one chapter; the bulk deck is elsewhere.
 await page.click('.deck-item:has-text("All decks")');
-await page.waitForSelector('.card-table');
+await page.waitForSelector('.card-row');
 await page.waitForTimeout(300);
-const firstPage = await page.locator('#cards-body tr').count();
+const firstPage = await page.locator('#cards-body .card-row').count();
 check('the first slice is one page long', firstPage === 50);
 check('there is no pager', await page.locator('.pager').count() === 0);
 for (let i = 0; i < 4; i += 1) {
@@ -377,10 +382,42 @@ for (let i = 0; i < 4; i += 1) {
   });
   await page.waitForTimeout(400);
 }
-const afterScroll = await page.locator('#cards-body tr').count();
+const afterScroll = await page.locator('#cards-body .card-row').count();
 check('scrolling appends the rest', afterScroll > firstPage);
 check('the list says when it has run out',
   (await page.locator('#cards-footer').textContent()).includes('all of them'));
+
+// ── The left panel opens the same way everywhere ──────────────────────────
+// Only the deck panel has a "+", and letting the button be absent elsewhere
+// made the header shorter there, so Quiz did not line up with Home.
+const railTops = [];
+for (const nav of ['Home', 'Quiz', 'Cards', 'Import', 'Stats', 'Settings']) {
+  await page.click(`.nav-link:has-text("${nav}")`);
+  await page.waitForSelector('#sidebar .deck-item');
+  await page.waitForTimeout(150);
+  railTops.push(await page.evaluate(() =>
+    Math.round(document.querySelector('#sidebar .deck-item').getBoundingClientRect().top)));
+}
+check('the first row of the left panel starts at the same height everywhere',
+  new Set(railTops).size === 1);
+
+// ── No em dashes reach the interface ──────────────────────────────────────
+const dashes = [];
+for (const nav of ['Home', 'Quiz', 'Cards', 'Import', 'Stats', 'Settings']) {
+  await page.click(`.nav-link:has-text("${nav}")`);
+  await page.waitForSelector('h1');
+  await page.waitForTimeout(200);
+  if ((await page.locator('body').innerText()).includes('\u2014')) dashes.push(nav);
+}
+check(`no em dash on any page${dashes.length ? ` (${dashes.join(', ')})` : ''}`,
+  dashes.length === 0);
+
+// ── Import hands over deck names, not a schema ────────────────────────────
+await page.click('.nav-link:has-text("Import")');
+await page.waitForSelector('#import-text');
+check('Import offers the deck names, and does not repeat the skill\'s schema',
+  await page.locator('[data-action="copyDecks"]').count() === 1
+  && await page.locator('[data-action="copySchema"]').count() === 0);
 
 check('no console errors anywhere', consoleErrors.length === 0);
 

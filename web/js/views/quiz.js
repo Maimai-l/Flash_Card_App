@@ -10,7 +10,7 @@ import { api } from '../core/api.js';
 import { $content, esc, attr, showToast, showModal, closeModal, confirmDialog, promptDialog } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { navigate, render } from '../core/router.js';
-import { renderSidebar } from './sidebar.js';
+import { renderSidebar, railHead } from './sidebar.js';
 
 const DOTS = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>`;
 
@@ -38,10 +38,7 @@ export function quizSidebar() {
       <span class="deck-count">${count}</span>
     </div>`).join('');
 
-  return `
-    <div class="section-label" style="padding:0 10px">
-      <span class="grow">${esc(t('nav_quiz'))}</span>
-    </div>
+  return railHead(t('nav_quiz')) + `
     <div class="deck-item ${S.quizSubject === null ? 'active' : ''}"
          data-action="selectQuizSubject" data-subject="">
       <span class="deck-twisty leaf"></span>
@@ -60,10 +57,16 @@ export async function renderQuizList() {
     return;
   }
 
+  const subjectLabel = S.quizSubject ? S.quizSubject : t('all_quizzes');
+  const head = `
+      <div class="page-head">
+        <div class="kicker">${esc(t('nav_quiz'))}</div>
+        <h1>${esc(subjectLabel)}</h1>
+      </div>`;
+
   if (!groups.length) {
     $content().innerHTML = `
-      <div class="page">
-        <div class="page-head"><h1>${esc(t('quizzes'))}</h1></div>
+      <div class="page">${head}
         <div class="card"><div class="empty">${esc(t('no_quizzes'))}</div></div>
       </div>`;
     return;
@@ -73,56 +76,42 @@ export async function renderQuizList() {
     ? groups
     : groups.filter((group) => (group.subject || '') === S.quizSubject);
 
-  const bySubject = new Map();
-  for (const group of visible) {
-    const key = group.subject || '';
-    if (!bySubject.has(key)) bySubject.set(key, []);
-    bySubject.get(key).push(group);
-  }
+  const cards = visible.map((group) => {
+    const status = group.in_progress
+      ? t('in_progress', { done: group.progress_answered, total: group.progress_total })
+      : (group.attempts
+        ? t('last_result', {
+          correct: group.last_correct, total: group.last_total,
+          when: relativeDay(group.last_taken),
+        })
+        : t('never_taken'));
 
-  const sections = [...bySubject.entries()].map(([subject, items]) => `
-    <div class="quiz-group">
-      ${subject ? `<div class="section-label">${esc(subject)}</div>` : ''}
-      <div class="list">
-        ${items.map((group) => `
-          <div class="list-row">
-            <div class="quiz-row-main">
-              <div class="quiz-row-name">${esc(group.name)}</div>
-              <div class="quiz-row-meta">
-                ${group.question_count} ${esc(t('questions'))}
-                &nbsp;·&nbsp;
-                ${group.in_progress
-                  ? `<span class="badge badge-blue">${esc(t('in_progress', {
-                      done: group.progress_answered, total: group.progress_total,
-                    }))}</span>`
-                  : (group.attempts
-                    ? esc(t('last_result', {
-                        correct: group.last_correct, total: group.last_total,
-                        when: relativeDay(group.last_taken),
-                      }))
-                    : esc(t('never_taken')))}
-              </div>
-            </div>
-            ${group.in_progress ? `
-              <button class="btn-text" data-action="startQuiz" data-group="${group.group_id}"
-                      data-fresh="1">${esc(t('start_over'))}</button>` : ''}
+    return `
+      <div class="card quiz-card">
+        <div class="quiz-subject">${esc(group.subject || '')}</div>
+        <div class="quiz-name">${esc(group.name)}</div>
+        <div class="quiz-meta">${group.question_count} ${esc(t('questions'))} \u00b7 ${esc(status)}</div>
+        <div class="quiz-actions">
+          <button class="btn btn-primary btn-sm" data-action="startQuiz"
+                  data-group="${group.group_id}"
+                  ${group.in_progress ? 'data-resume="1"' : ''}>
+            ${esc(group.in_progress ? t('resume') : t('start'))}
+          </button>
+          ${group.in_progress ? `
             <button class="btn btn-secondary btn-sm" data-action="startQuiz"
-                    data-group="${group.group_id}"
-                    ${group.in_progress ? 'data-resume="1"' : ''}>
-              ${esc(group.in_progress ? t('resume') : t('start'))}
-            </button>
-            <button class="icon-btn" data-action="quizMenu"
-                    data-group="${group.group_id}"
-                    data-name="${attr(group.name)}"
-                    data-subject="${attr(group.subject || '')}">${DOTS}</button>
-          </div>`).join('')}
-      </div>
-    </div>`).join('');
+                    data-group="${group.group_id}" data-fresh="1">${esc(t('start_over'))}</button>` : ''}
+          <span class="grow"></span>
+          <button class="icon-btn bare" data-action="quizMenu"
+                  data-group="${group.group_id}"
+                  data-name="${attr(group.name)}"
+                  data-subject="${attr(group.subject || '')}">${DOTS}</button>
+        </div>
+      </div>`;
+  }).join('');
 
   $content().innerHTML = `
-    <div class="page">
-      <div class="page-head"><h1>${esc(t('quizzes'))}</h1></div>
-      <div class="narrow">${sections}</div>
+    <div class="page">${head}
+      <div class="quiz-grid">${cards}</div>
     </div>`;
 }
 

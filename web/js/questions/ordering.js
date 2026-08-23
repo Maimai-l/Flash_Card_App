@@ -54,16 +54,17 @@ const ordering = {
     }).join('');
 
     const answerList = state.answered && !ordering.grade(question, order)
-      ? `<div class="mt16 sub small">${esc(t('correct_answer'))}:
+      ? `<div class="q-explain mt16">${esc(t('correct_answer'))}:
            <ol style="margin-top:6px;padding-left:1.3em">${
              items.map((item) => `<li>${rich(item)}</li>`).join('')}</ol></div>`
       : '';
 
     return `
-      <div class="q-prompt">${rich(question.prompt)}</div>
-      <div class="sub small mb16">${esc(t('reorder_hint'))}</div>
-      <div class="order-list">${rows}</div>
-      ${answerList}`;
+      <div class="q-card">
+        <div class="setting-note mb16">${esc(t('reorder_hint'))}</div>
+        <div class="order-list">${rows}</div>
+        ${answerList}
+      </div>`;
   },
 
   mount(root, question, state, ctx) {
@@ -89,8 +90,8 @@ const ordering = {
   summary(question, response) {
     const items = question.items || [];
     return {
-      given: (response || []).map((i) => items[i]).join(' → '),
-      correct: items.join(' → '),
+      given: (response || []).map((i) => items[i]).join(' \u2192 '),
+      correct: items.join(' \u2192 '),
     };
   },
 };

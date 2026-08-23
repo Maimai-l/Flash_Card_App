@@ -407,3 +407,55 @@ def test_skill_delivers_a_file_rather_than_a_pasted_code_block():
     assert "Never paste the JSON into your reply" in text
     assert "The deliverable is a file" in text
     assert "Paste the validated content into your reply" not in text
+
+
+# ── Naming ────────────────────────────────────────────────────────────────
+# The subject level carries the daily limit and is what the user reads down the
+# left of every screen. A syllabus code there is both meaningless to read and a
+# way to end up with one course split across two budgets.
+
+@pytest.mark.parametrize("deck", [
+    "9709::Pure 1",
+    "9618::Data Representation",
+    "Computer Science::Paper 1",
+    "Mathematics::Unit 3",
+])
+def test_a_code_in_the_deck_path_is_flagged(validator, deck):
+    text = json.dumps({"deck": deck, "cards": [
+        {"id": "m.a", "front": "What is it?", "back": "A thing."}]})
+    report = validator.Report()
+    validator.validate_payload(validator.parse_json(text, report), report)
+    assert any("is a code, not a name" in m for _, m in report.warnings), report.warnings
+
+
+def test_a_year_in_the_deck_path_is_flagged(validator):
+    text = json.dumps({"deck": "Mathematics::Pure 1 2026", "cards": [
+        {"id": "m.a", "front": "What is it?", "back": "A thing."}]})
+    report = validator.Report()
+    validator.validate_payload(validator.parse_json(text, report), report)
+    assert any("contains a year" in m for _, m in report.warnings), report.warnings
+
+
+def test_a_real_course_name_passes(validator):
+    text = json.dumps({"deck": "Mathematics::Pure 1", "cards": [
+        {"id": "m.a", "front": "What is it?", "back": "A thing."}]})
+    report = validator.Report()
+    validator.validate_payload(validator.parse_json(text, report), report)
+    assert not report.warnings, report.warnings
+
+
+def test_the_syllabus_code_is_welcome_as_a_tag(validator):
+    """The rule sends the code to `tags`, so `tags` has to accept it. When the
+    two disagree the author is told off whichever way they write it."""
+    text = json.dumps({"deck": "Mathematics::Pure 1", "cards": [
+        {"id": "m.a", "front": "What is it?", "back": "A thing.",
+         "tags": ["formula", "9709"]}]})
+    report = validator.Report()
+    validator.validate_payload(validator.parse_json(text, report), report)
+    assert not report.warnings, report.warnings
+
+
+def test_skill_names_courses_rather_than_codes():
+    text = SKILL_MD.read_text(encoding="utf-8")
+    assert "Never a code" in text
+    assert "`Mathematics::Pure 1` | `9709::Pure 1`" in text

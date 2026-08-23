@@ -38,10 +38,16 @@ export async function navigate(page, params = {}) {
 
 export async function render({ silent = false } = {}) {
   const route = routes[S.page] || routes.home;
+  const full = route.chrome === 'full';
   clearKeys();
-  document.getElementById('topbar').hidden = route.chrome === 'full';
+  // The CJK rules in base.css key off this, and so does the browser's own
+  // line-breaking, which differs between the two languages.
+  document.documentElement.dataset.lang = S.lang;
+  document.documentElement.lang = S.lang === 'zh' ? 'zh-Hans' : 'en';
+  document.getElementById('topbar').hidden = full;
   document.getElementById('sidebar').hidden = route.chrome !== 'app';
-  $content().classList.toggle('full', route.chrome === 'full');
+  document.getElementById('body').classList.toggle('full', full);
+  $content().classList.toggle('full', full);
   renderNav();
   if (!silent) loading();
   if (route.chrome === 'app' && renderChrome) await renderChrome();

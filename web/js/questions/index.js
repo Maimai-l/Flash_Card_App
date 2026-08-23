@@ -4,7 +4,7 @@
 
      autoSubmit(question)        submit as soon as an answer is picked?
      initialResponse(question)   the blank response to start from
-     render(question, state)     HTML for both the unanswered and marked states
+     render(question, state)     HTML for the answer area, prompt excluded
      mount(root, q, state, ctx)  wire up inputs; ctx = {setResponse, submit}
      canSubmit(question, state)  is there enough of an answer to grade?
      grade(question, response)   true / false
@@ -24,6 +24,13 @@ const TYPES = { mcq, cloze, short, ordering };
 
 export function questionType(name) {
   return TYPES[name] || null;
+}
+
+/* The prompt is drawn by the runner, above the answer area, so every question
+   type gets the same heading treatment and none of them repeats it. */
+export function questionPrompt(question) {
+  if (question.prompt) return question.prompt;
+  return question.type === 'cloze' ? '' : (question.text || '');
 }
 
 export function questionLabel(question) {

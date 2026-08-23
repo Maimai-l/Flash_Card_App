@@ -105,7 +105,7 @@ class StudyService:
 
         totals = {
             "new_available": 0, "review_available": 0,
-            "new_total": 0, "due_total": 0, "overdue": 0,
+            "new_total": 0, "due_total": 0,
             "new_limit": 0, "review_limit": 0, "new_done": 0, "review_done": 0,
         }
         for scope in scopes:
@@ -116,7 +116,6 @@ class StudyService:
             totals["due_total"] += due_here
             totals["new_available"] += min(new_here, budget["new_left"])
             totals["review_available"] += min(due_here, budget["review_left"])
-            totals["overdue"] += self.cards.count_overdue(scope["select"], window.start_iso)
             totals["new_limit"] += min(budget["new_limit"], UNLIMITED)
             totals["review_limit"] += min(budget["review_limit"], UNLIMITED)
             totals["new_done"] += budget["new_done"]
@@ -249,30 +248,3 @@ class StudyService:
         if not card:
             return {"ok": False, "error": "Nothing to undo"}
         return {"ok": True, "card": self._present(card)}
-
-    # ── Backlog relief ────────────────────────────────────────────────────
-
-    def spread_overdue(self, deck_path: str = "", days: int = 7) -> dict:
-        """
-        Flatten a backlog: take everything already overdue and lay it out evenly
-        across the next `days` days so it stops being a wall.
-        """
-        days = max(1, min(int(days), 60))
-        window = DayWindow()
-        deck_ids = self.decks.descendant_ids(deck_path) if normalise_path(deck_path) else None
-        overdue = self.cards.overdue_cards(deck_ids, window.start_iso)
-        if not overdue:
-            return {"ok": True, "moved": 0, "days": days}
-
-        per_day = -(-len(overdue) // days)  # ceil
-        local_midnight = datetime.combine(
-            datetime.now().astimezone().date(), time(hour=4)
-        ).astimezone()
-
-        pairs = []
-        for index, card in enumerate(overdue):
-            offset = index // per_day
-            due = (local_midnight + timedelta(days=offset)).astimezone(timezone.utc)
-            pairs.append((card["card_id"], due.isoformat()))
-        self.cards.set_due_dates(pairs)
-        return {"ok": True, "moved": len(pairs), "days": days, "per_day": per_day}

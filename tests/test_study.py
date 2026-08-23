@@ -136,7 +136,8 @@ def test_undo_with_no_history_is_harmless(context):
     assert context.study.undo()["ok"] is False
 
 
-def test_overdue_backlog_is_counted_but_not_queued(context):
+def test_a_backlog_never_arrives_as_a_wall(context):
+    """Forty days of neglect still hands you one day's worth, not the pile."""
     deck_id = seed(context, "Mathematics", 30)
     long_ago = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
     for card in context.cards.list_cards([deck_id], limit=100)["cards"]:
@@ -148,29 +149,8 @@ def test_overdue_backlog_is_counted_but_not_queued(context):
         )
     context.settings.set("default_review_limit", 10)
 
-    overview = context.study.overview("Mathematics")
-    assert overview["overdue"] == 30
-    assert overview["review_available"] == 10           # the wall never arrives whole
+    assert context.study.overview("Mathematics")["review_available"] == 10
     assert len(context.study.build_queue("Mathematics")["cards"]) == 10
-
-
-def test_spreading_the_backlog_flattens_it(context):
-    deck_id = seed(context, "Mathematics", 30)
-    long_ago = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
-    for card in context.cards.list_cards([deck_id], limit=100)["cards"]:
-        context.cards.apply_review(
-            card["card_id"], 3,
-            {"stability": 5.0, "difficulty": 5.0, "due_date": long_ago,
-             "last_review": long_ago, "state": 2, "step": None},
-            long_ago, "2000-01-01",
-        )
-
-    result = context.study.spread_overdue("Mathematics", 6)
-    assert result["moved"] == 30
-    assert context.study.overview("Mathematics")["overdue"] == 0
-
-    due_dates = {c["due_date"][:10] for c in context.cards.list_cards([deck_id], limit=100)["cards"]}
-    assert len(due_dates) == 6
 
 
 def test_browse_changes_nothing(context):

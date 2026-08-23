@@ -28,6 +28,10 @@ TAG_VOCABULARY = {
     "definition", "theorem", "proof", "formula",
     "procedure", "example", "pitfall", "exam",
 }
+# The one tag outside the closed vocabulary. A syllabus code identifies the
+# exam a card is for, which the deck path deliberately does not carry, and it is
+# the thing a user actually filters by the week before a paper.
+SYLLABUS_TAG = re.compile(r"^[A-Za-z]{0,4}\d{3,5}[A-Za-z]?$")
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)+$")
 CLOZE_PATTERN = re.compile(r"\{\{(.+?)\}\}", re.S)
 # Fronts are questions or imperatives. This list is reproduced verbatim in
@@ -171,9 +175,11 @@ def validate_card(entry, index: int, default_deck: str, report: Report) -> dict 
             if len(tags) > 2:
                 report.warn(label, f"{len(tags)} tags — two is the limit")
             for tag in tags:
-                if tag.lower() not in TAG_VOCABULARY:
-                    report.warn(label, f"tag {tag!r} is outside the vocabulary "
-                                       f"({', '.join(sorted(TAG_VOCABULARY))})")
+                if tag.lower() in TAG_VOCABULARY or SYLLABUS_TAG.match(tag):
+                    continue
+                report.warn(label, f"tag {tag!r} is outside the vocabulary "
+                                   f"({', '.join(sorted(TAG_VOCABULARY))}, "
+                                   "or a syllabus code such as 9709)")
 
     for field, text in (("front", front), ("back", back), ("hint", hint)):
         if text:
@@ -203,6 +209,23 @@ def shared_terms(hint: str, back: str) -> set[str]:
            ((cjk_bigrams(hint) & cjk_bigrams(back)) - CJK_STOPWORDS)
 
 
+# A deck level that is a syllabus code, a paper number or a year. The subject
+# level carries the daily limit and is what the user reads in the sidebar, so it
+# has to be the name of the thing being studied. "9709" tells them nothing, and
+# the same course under two codes silently becomes two subjects with two
+# budgets. Codes belong in `tags`, where they are searchable and cost nothing.
+CODE_LEVEL = re.compile(
+    r"""^(
+        \d{3,5}[A-Za-z]?              # 9709, 9618, 0478, 9231A
+      | (AS|A2|IG|IB|AP|HL|SL)\s*\d+  # AS 9709, IB 12
+      | (Paper|P|Unit|Module|Ch|Chapter|Topic)\s*\d+   # Paper 1, Unit 3
+      | (19|20)\d{2}                  # 2026
+    )$""",
+    re.VERBOSE | re.IGNORECASE,
+)
+YEAR = re.compile(r"\b(19|20)\d{2}\b")
+
+
 def validate_deck_path(deck: str, where: str, report: Report):
     if "/" in deck and "::" not in deck:
         report.warn(where, f"deck {deck!r} uses / — levels are separated by ::")
@@ -213,6 +236,16 @@ def validate_deck_path(deck: str, where: str, report: Report):
         report.warn(where, f"deck {deck!r} is a single level — use Subject::Module")
     if len(parts) > 3:
         report.warn(where, f"deck {deck!r} is {len(parts)} levels deep — three is the limit")
+
+    for depth, part in enumerate(parts):
+        name = part.strip()
+        if CODE_LEVEL.match(name):
+            what = "subject" if depth == 0 else "level"
+            report.warn(where, f"deck {deck!r}: {what} {name!r} is a code, not a name — "
+                               f"name the course ('Mathematics') and put {name!r} in tags")
+        elif YEAR.search(name):
+            report.warn(where, f"deck {deck!r}: level {name!r} contains a year — "
+                               "a deck outlives the sitting that made it")
 
 
 # ── Questions ─────────────────────────────────────────────────────────────

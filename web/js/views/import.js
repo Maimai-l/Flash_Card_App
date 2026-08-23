@@ -6,59 +6,9 @@
 
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
-import { $content, esc, attr, showToast } from '../core/dom.js';
+import { $content, esc, attr, showToast, showModal } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { render } from '../core/router.js';
-
-const SCHEMA_FOR_LLM = `Produce JSON for my flashcard app. Two independent shapes:
-
-CARDS — persistent, scheduled by FSRS. Every card is front + back.
-{
-  "deck": "Mathematics::Linear Algebra",
-  "cards": [
-    {
-      "front": "Define an eigenvector of A",
-      "back": "A nonzero vector $v$ with $Av = \\\\lambda v$.",
-      "hint": "think about direction",      // optional
-      "tags": ["definition"],               // optional
-      "id": "la.eigenvector.def",           // optional, stable: re-import updates
-      "deck": "Mathematics::Other"          // optional, overrides the top-level deck
-    }
-  ]
-}
-
-QUIZ — a fixed set of questions, taken on demand, never scheduled.
-{
-  "quiz": {
-    "name": "Linear Algebra — Ch.3",
-    "subject": "Mathematics",
-    "id": "la.ch3",                          // optional; re-import replaces this quiz
-    "questions": [
-      { "type": "mcq", "prompt": "Which is NOT a vector space axiom?",
-        "options": ["Closure under addition", "A multiplicative inverse for every vector",
-                    "Associativity", "Existence of a zero vector"],
-        "answer": 1,                         // option index; use [0,2] for multi-answer
-        "explain": "Vector spaces need additive inverses, not multiplicative." },
-
-      { "type": "cloze", "text": "rank(A) + {{nullity(A)}} = {{n|dim V}}",
-        "explain": "Rank-nullity theorem." },
-
-      { "type": "short", "prompt": "Symbol for the eigenvalue?",
-        "answers": ["lambda", "\\u03bb"], "match": "loose" },
-
-      { "type": "ordering", "prompt": "Order the steps of Gaussian elimination",
-        "items": ["Forward elimination", "Back substitution", "Read off the solution"] }
-    ]
-  }
-}
-
-Rules:
-- Both shapes may appear in one object; "quizzes": [...] imports several quizzes.
-- Cards and quizzes are unrelated. A quiz question never attaches to a card.
-- Question types: mcq, cloze, short, ordering. Anything else is skipped.
-- cloze marks its own blanks with {{...}}; alternatives are separated by |.
-- Maths goes in $...$ (inline) or $$...$$ (display), TeX syntax.
-- Markdown allowed in card text: **bold**, *italic*, \`code\`, - lists, 1. lists.`;
 
 function state() {
   if (!S.importView) S.importView = { text: '', deck: '', preview: null, duplicates: false };
@@ -72,54 +22,44 @@ export async function renderImport() {
   $content().innerHTML = `
     <div class="page">
       <div class="page-head">
+        <div class="kicker">${esc(t('nav_import'))}</div>
         <h1>${esc(t('import_title'))}</h1>
       </div>
 
       <div class="import-grid">
-      <div class="import-input">
-      <div class="field">
-        <div class="row" style="justify-content:flex-end;margin-bottom:6px">
-          <button class="btn btn-secondary btn-sm"
-                  data-action="copySchema">${esc(t('copy_schema'))}</button>
+        <div class="card card-pad import-main">
+          <div class="import-deck-line">
+            <label class="field-label">${esc(t('target_deck'))}</label>
+            <select class="select" id="import-deck" data-change="importDeck">
+              <option value="">${esc(t('from_json'))}</option>
+              ${decks.map((path) => `<option value="${attr(path)}" ${
+                path === view.deck ? 'selected' : ''}>${esc(path)}</option>`).join('')}
+            </select>
+          </div>
+          <textarea class="paste-box" id="import-text" data-input="importText" spellcheck="false"
+                    placeholder='{ "deck": "Mathematics", "cards": [ ... ] }'>${esc(view.text)}</textarea>
+          <div class="import-actions">
+            <button class="btn btn-secondary" data-action="previewImport">${esc(t('validate'))}</button>
+          </div>
         </div>
-        <label class="field-label">${esc(t('paste_json'))}</label>
-        <textarea class="textarea code" id="import-text" data-input="importText"
-                  style="min-height:280px" spellcheck="false"
-                  placeholder='{ "deck": "Mathematics", "cards": [ … ] }'>${esc(view.text)}</textarea>
-      </div>
 
-      <div class="row gap12 mb16" style="flex-wrap:wrap">
-        <div class="field" style="margin:0;min-width:240px">
-          <label class="field-label">${esc(t('target_deck'))}</label>
-          <select class="select" id="import-deck" data-change="importDeck">
-            <option value="">${esc(t('from_json'))}</option>
-            ${decks.map((path) => `<option value="${attr(path)}" ${
-              path === view.deck ? 'selected' : ''}>${esc(path)}</option>`).join('')}
-          </select>
+        <div class="import-side" id="import-result">
+          ${view.preview ? previewHtml(view.preview) : emptyPreviewHtml()}
         </div>
-        <span class="grow"></span>
-        <button class="btn btn-secondary" data-action="previewImport">${esc(t('validate'))}</button>
-      </div>
-
-      </div>
-
-      <div class="import-side" id="import-result">
-        ${view.preview ? previewHtml(view.preview) : emptyPreviewHtml()}
-      </div>
       </div>
     </div>`;
 }
 
-/* The panel beside the paste box is not empty before you validate — it says what
-   the box expects, which is the thing you need while filling it in. */
+/* The panel beside the paste box is not empty before you validate: it says what
+   the box expects, and it hands over the deck names you are allowed to write
+   into it. The format itself belongs to the authoring skill, not to a button
+   here, so what this copies is the one thing the skill cannot know. */
 function emptyPreviewHtml() {
   return `
     <div class="card card-pad">
-      <div class="section-label">${esc(t('what_goes_here'))}</div>
-      <div class="sub" style="font-size:13px;line-height:1.7">
-        ${esc(t('import_hint_body'))}
-      </div>
-      <pre class="import-shape">{
+      <div class="card-title">${esc(t('what_goes_here'))}</div>
+      <div class="setting-note mt8">${esc(t('import_hint_body'))}</div>
+      <pre class="import-shape mt16">{
   "deck": "Computer Science::Networks",
   "cards": [
     { "id": "net.arp",
@@ -127,7 +67,11 @@ function emptyPreviewHtml() {
       "back": "An IP address to a MAC address." }
   ]
 }</pre>
-      <div class="sub small mt8">${esc(t('import_hint_quiz'))}</div>
+      <div class="setting-note mt16">${esc(t('import_hint_quiz'))}</div>
+      <div class="mt16">
+        <button class="btn btn-secondary btn-sm" data-action="copyDecks">${esc(t('copy_decks'))}</button>
+      </div>
+      <div class="setting-note mt8">${esc(t('copy_decks_desc'))}</div>
     </div>`;
 }
 
@@ -164,8 +108,8 @@ function previewHtml(preview) {
           `${esc(d.deck)} · ${d.count}`).join('&nbsp;&nbsp;·&nbsp;&nbsp;')}</div>` : ''}
 
       ${(preview.quizzes || []).map((quiz) => `
-        <div class="mt8 sub small">${esc(quiz.name)} — ${quiz.questions} ${esc(t('questions'))}
-          <span class="badge ${quiz.action === 'replace' ? 'badge-orange' : 'badge-blue'}">${
+        <div class="mt8 sub small">${esc(quiz.name)} \u00b7 ${quiz.questions} ${esc(t('questions'))}
+          <span class="chip ${quiz.action === 'replace' ? 'chip-learning' : 'chip-new'}">${
             esc(quiz.action === 'replace' ? t('will_replace') : t('will_create'))}</span></div>`).join('')}
 
       ${(preview.issues || []).length ? `
@@ -198,16 +142,22 @@ export const actions = {
   importDeck: (el) => { state().deck = el.value; },
   toggleDuplicates: (el) => { state().duplicates = el.checked; },
 
-  copySchema: async () => {
+  /* Every deck path that exists, one per line, so a model writing cards puts
+     them where they belong instead of inventing a deck next to the real one. */
+  copyDecks: async () => {
+    const paths = S.decks.map((deck) => deck.path);
+    if (!paths.length) return showToast(t('no_decks_to_copy'), 2400);
+    const text = paths.join('\n');
     try {
-      await navigator.clipboard.writeText(SCHEMA_FOR_LLM);
-      showToast(t('schema_copied'), 2400);
+      await navigator.clipboard.writeText(text);
+      showToast(t('decks_copied', { n: paths.length }), 2400);
     } catch (err) {
-      const box = document.getElementById('import-text');
-      box.value = SCHEMA_FOR_LLM;
-      state().text = SCHEMA_FOR_LLM;
-      box.select();
-      showToast(t('schema_copied'), 2400);
+      showModal(`<h2>${esc(t('copy_decks'))}</h2>
+        <textarea class="textarea code" style="min-height:220px">${esc(text)}</textarea>
+        <div class="modal-actions">
+          <span class="grow"></span>
+          <button class="btn btn-quiet btn-sm" data-action="closeModal">${esc(t('close'))}</button>
+        </div>`);
     }
   },
 

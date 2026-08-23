@@ -5,6 +5,7 @@ import { api } from '../core/api.js';
 import { $content, esc, attr, showToast, confirmDialog } from '../core/dom.js';
 import { t, LANGUAGES } from '../core/i18n.js';
 import { render } from '../core/router.js';
+import { railHead } from './sidebar.js';
 
 const SECTIONS = [
   { id: 'language', key: 'language' },
@@ -15,10 +16,7 @@ const SECTIONS = [
 
 /** Left column on Settings: its own sections, not a deck tree. */
 export function settingsSidebar() {
-  return `
-    <div class="section-label" style="padding:0 10px">
-      <span class="grow">${esc(t('settings_title'))}</span>
-    </div>
+  return railHead(t('settings_title')) + `
     ${SECTIONS.map((section) => `
       <div class="deck-item" data-action="scrollToSection" data-section="${section.id}">
         <span class="deck-twisty leaf"></span>
@@ -34,78 +32,70 @@ export async function renderSettings() {
 
   $content().innerHTML = `
     <div class="page">
-      <div class="page-head"><h1>${esc(t('settings_title'))}</h1></div>
+      <div class="page-head">
+        <div class="kicker">${esc(t('nav_settings'))}</div>
+        <h1>${esc(t('settings_title'))}</h1>
+      </div>
 
       <div class="narrow">
-      <div class="section-label" id="section-language">${esc(t('language'))}</div>
-      <div class="list mb24">
-        <div class="setting-row">
-          <div class="setting-main"><div class="setting-name">${esc(t('language'))}</div></div>
-          <select class="select" style="width:150px" data-change="setLanguage">
-            ${LANGUAGES.map((lang) => `<option value="${lang.code}" ${
-              lang.code === S.lang ? 'selected' : ''}>${esc(lang.label)}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-
-      <div class="section-label" id="section-limits">${esc(t('daily_limits'))}</div>
-      <div class="list">
-        <div class="setting-row">
-          <div class="setting-main">
-            <div class="setting-name">${esc(t('default_new_limit'))}</div>
-            <div class="setting-desc">${esc(t('limits_desc'))}</div>
+        <div class="card settings-section" id="section-language">
+          <div class="card-title">${esc(t('language'))}</div>
+          <div class="row gap8">
+            ${LANGUAGES.map((lang) => `
+              <button class="btn ${lang.code === S.lang ? 'btn-primary' : 'btn-secondary'}"
+                      data-action="setLanguage" data-lang="${attr(lang.code)}">${esc(lang.label)}</button>`).join('')}
           </div>
-          <input class="input input-inline" type="number" min="-1" data-change="setDefaultLimit"
-                 data-key="default_new_limit"
-                 value="${attr(S.settings.default_new_limit || '10')}">
         </div>
-        <div class="setting-row">
-          <div class="setting-main">
-            <div class="setting-name">${esc(t('default_review_limit'))}</div>
-          </div>
-          <input class="input input-inline" type="number" min="-1" data-change="setDefaultLimit"
-                 data-key="default_review_limit"
-                 value="${attr(S.settings.default_review_limit || '60')}">
-        </div>
-      </div>
 
-      ${subjects.length ? `
-        <div class="section-label mt24" id="section-subjects">${esc(t('per_deck_limits'))}</div>
-        <div class="list">
-          ${subjects.map((deck) => `
+        <div class="card settings-section" id="section-limits">
+          <div class="card-title">${esc(t('daily_limits'))}</div>
+          <div class="row gap24" style="flex-wrap:wrap">
+            <div class="field" style="margin:0">
+              <label class="field-label">${esc(t('default_new_limit'))}</label>
+              <input class="input input-inline" type="number" min="-1" data-change="setDefaultLimit"
+                     data-key="default_new_limit"
+                     value="${attr(S.settings.default_new_limit || '10')}">
+            </div>
+            <div class="field" style="margin:0">
+              <label class="field-label">${esc(t('default_review_limit'))}</label>
+              <input class="input input-inline" type="number" min="-1" data-change="setDefaultLimit"
+                     data-key="default_review_limit"
+                     value="${attr(S.settings.default_review_limit || '60')}">
+            </div>
+          </div>
+          <div class="setting-note">${esc(t('limits_desc'))}</div>
+        </div>
+
+        <div class="card settings-section" id="section-subjects">
+          <div class="card-title">${esc(t('per_deck_limits'))}</div>
+          <div class="setting-note">${esc(t('per_deck_desc'))}</div>
+          ${subjects.length ? subjects.map((deck) => `
             <div class="setting-row">
               <div class="setting-main">
                 <div class="setting-name">${esc(deck.name)}</div>
                 <div class="setting-desc">${deck.total} ${esc(t(deck.total === 1 ? 'card' : 'cards'))}</div>
               </div>
               <div class="limit-inputs">
+                <span class="cap">${esc(t('new_cards'))}</span>
                 <input class="input input-inline" type="number" min="-1"
                        data-change="setDeckLimit" data-deck="${attr(deck.path)}" data-kind="new"
                        placeholder="${attr(S.settings.default_new_limit || '10')}"
                        value="${deck.new_limit === null ? '' : deck.new_limit}">
-                <span>${esc(t('new_cards'))}</span>
+                <span class="cap">${esc(t('review_cards'))}</span>
                 <input class="input input-inline" type="number" min="-1"
                        data-change="setDeckLimit" data-deck="${attr(deck.path)}" data-kind="review"
                        placeholder="${attr(S.settings.default_review_limit || '60')}"
                        value="${deck.review_limit === null ? '' : deck.review_limit}">
-                <span>${esc(t('review_cards'))}</span>
               </div>
-            </div>`).join('')}
+            </div>`).join('') : `<div class="setting-note">${esc(t('no_cards_yet'))}</div>`}
         </div>
-        <div class="sub small mt8">${esc(t('per_deck_desc'))}</div>` : ''}
 
-      <div class="section-label mt24" id="section-data">${esc(t('data'))}</div>
-      <div class="list mb24">
-        <div class="setting-row">
-          <div class="setting-main">
-            <div class="setting-name">${esc(t('reset_all'))}</div>
-            <div class="setting-desc">${esc(t('reset_desc'))}</div>
-          </div>
-          <button class="btn btn-danger btn-sm" data-action="resetAll">${esc(t('reset_all'))}</button>
+        <div class="card settings-section" id="section-data">
+          <div class="card-title">${esc(t('data'))}</div>
+          <div><button class="btn btn-danger" data-action="resetAll">${esc(t('reset_all'))}</button></div>
+          <div class="setting-note">${esc(t('reset_desc'))}</div>
+          <div class="version-line">${esc(t('version'))} ${esc(S.version)}</div>
         </div>
-      </div>
-
-      <div class="sub small">${esc(t('version'))} ${esc(S.version)}</div>
       </div>
     </div>`;
 }
@@ -117,9 +107,9 @@ export const actions = {
   },
 
   setLanguage: async (el) => {
-    S.lang = el.value;
+    S.lang = el.dataset.lang;
     savePrefs();
-    await api.update_settings({ language: el.value });
+    await api.update_settings({ language: S.lang });
     await render();
   },
 

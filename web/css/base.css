@@ -1,133 +1,209 @@
+/* ── Fonts ──────────────────────────────────────────────────────────────────
+   Archivo, bundled in web/vendor/fonts, never fetched. One variable file per
+   subset covers 400 to 800. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('../vendor/fonts/archivo-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('../vendor/fonts/archivo-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Chinese is not bundled — a CJK face is megabytes — but the system face still
+   has to be chosen properly. PingFang, the macOS default, stops at Semibold, so
+   asking it for 700 or 800 makes the browser smear the Regular cut into a fake
+   bold. That synthetic weight is what made the Chinese interface look wrong.
+   These three faces hand each weight band a real cut instead, and the ranges do
+   not overlap so the match is unambiguous. */
+@font-face {
+  font-family: 'KC CJK';
+  font-weight: 100 400;
+  src: local('PingFang SC'), local('PingFangSC-Regular'), local('HarmonyOS Sans SC'),
+       local('Source Han Sans SC'), local('Noto Sans CJK SC'), local('Microsoft YaHei');
+  unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3200-4DBF, U+4E00-9FFF,
+    U+F900-FAFF, U+FE10-FE4F, U+FF00-FFEF;
+}
+@font-face {
+  font-family: 'KC CJK';
+  font-weight: 401 550;
+  src: local('PingFang SC Medium'), local('PingFangSC-Medium'), local('HarmonyOS Sans SC Medium'),
+       local('Source Han Sans SC Medium'), local('Noto Sans CJK SC Medium'), local('Microsoft YaHei');
+  unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3200-4DBF, U+4E00-9FFF,
+    U+F900-FAFF, U+FE10-FE4F, U+FF00-FFEF;
+}
+@font-face {
+  font-family: 'KC CJK';
+  font-weight: 551 900;
+  src: local('PingFang SC Semibold'), local('PingFangSC-Semibold'), local('HarmonyOS Sans SC Bold'),
+       local('Source Han Sans SC Bold'), local('Noto Sans CJK SC Bold'), local('Microsoft YaHei Bold');
+  unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3200-4DBF, U+4E00-9FFF,
+    U+F900-FAFF, U+FE10-FE4F, U+FF00-FFEF;
+}
+
 /* ── Tokens ─────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:          #F5F5F7;
+  --paper:       #F1F1F4;
   --surface:     #FFFFFF;
-  --surface-alt: #FAFAFC;
-  --text:        #1D1D1F;
-  --text-sub:    #86868B;
-  --text-faint:  #A9A9AE;
-  --border:      #DFDFE4;
-  --border-soft: #ECECEF;
-  --blue:        #007AFF;
-  --green:       #34C759;
-  --red:         #FF3B30;
-  --orange:      #FF9500;
-  --hover:       rgba(0, 0, 0, .045);
+  --field:       #FBFBFD;
+  --ink:         #111114;
+  --ink-2:       #3E3E46;
+  --grey-1:      #7A7A85;
+  --grey-2:      #8A8A93;
+  --grey-3:      #9B9BA6;
+  --grey-4:      #C0C0CA;
+  --fog:         #EFEFF2;
+  --fog-2:       #E2E2E8;
+  --line:        #E4E5F4;
+  --rule:        #DBDDF1;
+  --blue:        #2B32F0;
+  --blue-dark:   #1E24C4;
+  --blue-tint:   #E7E9FD;
+  --danger:      #C8434A;
+  --hover:       #FAFAFE;
 
-  /* Sequential ramp for the review heatmap: one hue, light to dark. */
-  --heat-0: #ECECEF;
-  --heat-1: #D6E8FC;
-  --heat-2: #A6CDF8;
-  --heat-3: #66A9F1;
-  --heat-4: #2E82E6;
-  --heat-5: #0A5FCB;
+  /* One hue, light to dark. The heatmap, the state breakdown and every bar in
+     the app read off this ramp, so nothing in the interface is coloured for
+     decoration and no single value can jump out at you. */
+  --ramp-0: #EFEFF2;
+  --ramp-1: #C9CEFA;
+  --ramp-2: #97A0F7;
+  --ramp-3: #5B66F4;
+  --ramp-4: #2B32F0;
+  --ramp-5: #111114;
 
-  --r-sm:   8px;
-  --r-md:   12px;
-  --r-pill: 999px;
+  --r-card:  22px;
+  --r-big:   26px;
+  --r-input: 12px;
+  --r-chip:  8px;
+  --r-pill:  999px;
 
-  --topbar-h:  52px;
-  --sidebar-w: 232px;
-  --read-width: 62ch;
+  --topbar-h:  72px;
+  --sidebar-w: 252px;
+  --shell-x:   24px;
+  --read-width: 64ch;
 
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter,
-             system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-             "Noto Sans CJK SC", sans-serif;
-  --font-num: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 16px rgba(0, 0, 0, .045);
-  --shadow-pop:  0 12px 40px rgba(0, 0, 0, .16);
+  --font-ui: 'Archivo', 'KC CJK', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+             system-ui, 'PingFang SC', 'HarmonyOS Sans SC', 'Noto Sans CJK SC',
+             'Microsoft YaHei', sans-serif;
+  --font-num: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 html, body { height: 100%; overflow: hidden; }
 
 body {
   font-family: var(--font-ui);
-  font-size: 14.5px;
-  line-height: 1.55;
-  background: var(--bg);
-  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--paper);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
+
+/* Chinese wants none of the Latin display tricks: negative tracking crushes it,
+   and the wide tracking on labels doubles the gap a CJK glyph already carries. */
+html[data-lang="zh"] h1,
+html[data-lang="zh"] .hero-value,
+html[data-lang="zh"] .result-score { letter-spacing: 0; }
+html[data-lang="zh"] .kicker,
+html[data-lang="zh"] .section-label,
+html[data-lang="zh"] .btn { letter-spacing: .04em; }
 
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 button { cursor: pointer; }
 a { color: var(--blue); text-decoration: none; }
+::selection { background: var(--blue); color: #fff; }
 
 /* ── Shell ──────────────────────────────────────────────────────────────────
    The document itself never scrolls. The shell is exactly the viewport, and the
    only thing that scrolls is the content pane, so the top bar and the sidebar
-   sit outside the scroll container and cannot be moved by a scrollbar appearing.
-
-   Reserving the gutter at the root was not enough on its own: a scrollbar next
-   to the chrome still changes what the chrome is measured against, and on macOS
-   styling ::-webkit-scrollbar turns the overlay bar into one that takes layout
-   space. Taking the scroll off the document removes the question entirely. */
+   sit outside the scroll container and cannot be moved by a scrollbar
+   appearing. */
 #app {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  height: 100dvh;   /* mobile browsers, where 100vh includes retracting chrome */
+  height: 100dvh;
   overflow: hidden;
 }
 
 #topbar[hidden] { display: none; }
 #topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
   height: var(--topbar-h);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 0 16px;
-  background: rgba(255, 255, 255, .86);
-  backdrop-filter: saturate(180%) blur(16px);
-  border-bottom: 1px solid var(--border-soft);
+  padding: 0 var(--shell-x);
 }
 #brand {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -.01em;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
-#nav { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+#nav { margin-left: auto; display: flex; align-items: center; gap: 7px; }
 .nav-link {
-  background: none;
-  border: none;
-  padding: 6px 12px;
-  border-radius: var(--r-sm);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-sub);
+  background: transparent;
+  border: 1.5px solid rgba(17, 17, 20, .16);
+  color: var(--ink-2);
+  border-radius: var(--r-pill);
+  padding: 8px 17px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: border-color .12s, color .12s, background .12s;
 }
-.nav-link:hover { background: var(--hover); color: var(--text); }
-.nav-link.active { background: var(--text); color: #fff; }
+.nav-link:hover { border-color: var(--ink); color: var(--ink); }
+.nav-link.active { background: var(--ink); border-color: var(--ink); color: #fff; }
 
-#body { flex: 1; display: flex; align-items: stretch; min-height: 0; }
+#body {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  gap: 20px;
+  padding: 0 var(--shell-x) var(--shell-x);
+}
 
 #sidebar {
   width: var(--sidebar-w);
   flex-shrink: 0;
-  border-right: 1px solid var(--border-soft);
-  padding: 16px 8px 32px;
+  background: var(--surface);
+  border-radius: var(--r-big);
+  padding: 18px 14px 20px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 #sidebar[hidden] { display: none; }
 
 #content {
   flex: 1;
   min-width: 0;
-  padding: 28px 32px 64px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   /* The pane keeps its own track reserved, so its contents do not shift either
      when a long list makes it scrollable. */
   scrollbar-gutter: stable;
-  animation: settle .22s ease-out;
+  padding-bottom: 8px;
+  animation: settle .2s ease-out;
 }
 @keyframes settle {
   from { opacity: 0; transform: translateY(4px); }
@@ -139,20 +215,28 @@ a { color: var(--blue); text-decoration: none; }
     transition-duration: .01ms !important;
   }
 }
-#content.full { padding: 0; height: 100%; overflow: hidden; scrollbar-gutter: auto; }
 
-/* One container width for every page in the app chrome. Two widths meant the
-   heading moved when you switched pages; content that wants to be narrower
-   constrains itself with .narrow instead of shrinking the page around it. */
-.page { max-width: 1180px; margin: 0 auto; }
-.narrow { max-width: 760px; }
+/* Study screens own the window: no top bar, no sidebar, no page padding. */
+#content.full { padding: 0; height: 100%; overflow: hidden; scrollbar-gutter: auto; }
+#body.full { padding: 0; gap: 0; }
+
+.page { max-width: 1220px; margin: 0 auto; padding-right: 2px; }
+.narrow { max-width: 780px; }
 .prose { max-width: var(--read-width); }
 
 /* ── Typography helpers ─────────────────────────────────────────────────── */
-h1 { font-size: 25px; font-weight: 600; letter-spacing: -.025em; }
-h2 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
-.sub { color: var(--text-sub); }
-.faint { color: var(--text-faint); }
+h1 { font-size: 38px; font-weight: 700; letter-spacing: -.02em; line-height: 1.05; }
+h2 { font-size: 18px; font-weight: 700; letter-spacing: -.005em; }
+.kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--grey-1);
+  line-height: 1.4;
+}
+.sub { color: var(--grey-2); }
+.faint { color: var(--grey-3); }
 .small { font-size: 12px; }
 .num { font-variant-numeric: tabular-nums; }
 .mono { font-family: var(--font-num); }
@@ -170,38 +254,37 @@ h2 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
 
 /* ── Spinner ────────────────────────────────────────────────────────────── */
 .spinner {
-  width: 22px; height: 22px;
-  border: 2px solid var(--border);
-  border-top-color: var(--text-sub);
+  width: 20px; height: 20px;
+  border: 2px solid var(--line);
+  border-top-color: var(--blue);
   border-radius: 50%;
   animation: spin .7s linear infinite;
-  margin: 72px auto;
+  margin: 84px auto;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Scrollbar ──────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #C9C9CE; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #ADADB3; }
+::-webkit-scrollbar-thumb { background: rgba(17, 17, 20, .18); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(17, 17, 20, .3); }
 
 /* ── Rendered card text (markdown subset + KaTeX) ───────────────────────── */
 .rich > * + * { margin-top: .55em; }
-.rich ul, .rich ol { padding-left: 1.35em; }
-.rich li + li { margin-top: .2em; }
+.rich ul, .rich ol { padding-left: 1.3em; }
+.rich li + li { margin-top: .22em; }
 .rich code {
   font-family: var(--font-num);
-  font-size: .9em;
-  background: var(--bg);
-  border: 1px solid var(--border-soft);
+  font-size: .88em;
+  background: var(--fog);
   border-radius: 5px;
-  padding: .1em .35em;
+  padding: .12em .38em;
 }
-.rich strong { font-weight: 600; }
-.rich .katex { font-size: 1.05em; }
+.rich strong { font-weight: 700; }
+.rich .katex { font-size: 1.04em; }
 .rich .katex-display { margin: .6em 0; overflow-x: auto; overflow-y: hidden; }
 
-@media (max-width: 760px) {
-  :root { --sidebar-w: 180px; }
-  #content { padding: 16px 14px 48px; }
+@media (max-width: 860px) {
+  :root { --sidebar-w: 200px; --shell-x: 14px; --topbar-h: 62px; }
+  h1 { font-size: 30px; }
 }

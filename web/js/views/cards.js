@@ -67,8 +67,10 @@ function toolbarHtml() {
   const state = view();
   const selectedCount = state.selected.size;
   return `
-    <input class="input" style="max-width:260px" id="card-search" data-input="searchCards"
-           placeholder="${attr(t('search'))}" value="${attr(state.search)}">
+    <span class="toolbar-search">
+      <input class="input input-pill" id="card-search" data-input="searchCards"
+             placeholder="${attr(t('search'))}" value="${attr(state.search)}">
+    </span>
     <span class="grow"></span>
     ${selectedCount ? `
       <span class="sub small">${esc(t('selected_n', { n: selectedCount }))}</span>
@@ -97,19 +99,15 @@ function renderToolbar() {
 function rowHtml(card) {
   const state = view();
   return `
-    <tr class="${state.selected.has(card.card_id) ? 'selected' : ''}">
-      <td style="width:26px">
-        <input type="checkbox" data-change="toggleCardSelect" data-id="${card.card_id}"
-               ${state.selected.has(card.card_id) ? 'checked' : ''}>
-      </td>
-      <td class="cell-front"><div class="cell-clip">${esc(plain(card.front))}</div></td>
-      <td class="cell-back"><div class="cell-clip">${esc(plain(card.back))}</div></td>
-      <td class="sub small nowrap">${esc(card.deck.split('::').pop())}</td>
-      <td class="nowrap">${stateBadge(card)}</td>
-      <td style="width:52px" class="nowrap">
-        <button class="btn-text" data-action="editCardRow" data-id="${card.card_id}">${esc(t('edit'))}</button>
-      </td>
-    </tr>`;
+    <div class="card-row ${state.selected.has(card.card_id) ? 'selected' : ''}">
+      <input type="checkbox" data-change="toggleCardSelect" data-id="${card.card_id}"
+             ${state.selected.has(card.card_id) ? 'checked' : ''}>
+      ${stateChip(card)}
+      <span class="cell-front">${esc(plain(card.front))}</span>
+      <span class="cell-back">${esc(plain(card.back))}</span>
+      <span class="cell-deck">${esc(card.deck.split('::').pop())}</span>
+      <button class="btn-text" data-action="editCardRow" data-id="${card.card_id}">${esc(t('edit'))}</button>
+    </div>`;
 }
 
 export async function renderCards() {
@@ -126,22 +124,16 @@ export async function renderCards() {
   $content().innerHTML = `
     <div class="page">
       <div class="page-head">
-        <h1>${esc(S.deck ? S.deck.split('::').pop() : t('all_decks'))}</h1>
-        <span class="sub small">${result.total} ${esc(t(result.total === 1 ? 'card' : 'cards'))}</span>
+        <div class="kicker">${esc(t('nav_cards'))}</div>
+        <h1>${esc(S.deck ? S.deck.split('::').pop() : t('all_decks'))}
+          <span class="count">${result.total} ${
+            esc(t(result.total === 1 ? 'card' : 'cards'))}</span></h1>
       </div>
 
-      <div class="table-toolbar" id="cards-toolbar">${toolbarHtml()}</div>
+      <div class="toolbar" id="cards-toolbar">${toolbarHtml()}</div>
 
       ${state.rows.length ? `
-        <div class="card" style="padding:14px 8px 8px">
-          <table class="card-table">
-            <thead><tr>
-              <th></th><th>${esc(t('front'))}</th><th>${esc(t('back'))}</th>
-              <th>${esc(t('deck'))}</th><th></th><th></th>
-            </tr></thead>
-            <tbody id="cards-body"></tbody>
-          </table>
-        </div>
+        <div class="card-list" id="cards-body"></div>
         <div class="list-end" id="cards-footer"></div>
         <div id="cards-sentinel" aria-hidden="true"></div>
       ` : `<div class="card"><div class="empty">${esc(t('no_cards_found'))}</div></div>`}
@@ -156,11 +148,14 @@ export async function renderCards() {
   }
 }
 
-function stateBadge(card) {
-  if (card.suspended) return `<span class="badge">${esc(t('suspend'))}</span>`;
-  if (!card.last_review) return `<span class="badge badge-blue">${esc(t('state_new'))}</span>`;
-  if (card.fsrs_state === 2) return `<span class="badge badge-green">${esc(t('state_review'))}</span>`;
-  return `<span class="badge badge-orange">${esc(t('state_learning'))}</span>`;
+/* New, Learning and Review are three points on one path, so they are three
+   shades of one colour rather than three unrelated ones. Nothing here is a
+   warning, so nothing here is red. */
+function stateChip(card) {
+  if (card.suspended) return `<span class="chip chip-suspended">${esc(t('suspend'))}</span>`;
+  if (!card.last_review) return `<span class="chip chip-new">${esc(t('state_new'))}</span>`;
+  if (card.fsrs_state === 2) return `<span class="chip chip-review">${esc(t('state_review'))}</span>`;
+  return `<span class="chip chip-learning">${esc(t('state_learning'))}</span>`;
 }
 
 /* ── Editor ─────────────────────────────────────────────────────────────── */

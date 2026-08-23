@@ -65,8 +65,8 @@ material itself is Chinese-language content.
 
 **The deliverable is a file. Never paste the JSON into your reply.**
 
-1. Write the JSON to a file named after the deck — `/tmp/9618-data-representation.json`
-   or the working directory if you have one.
+1. Write the JSON to a file named after the deck, in the working directory if
+   you have one: `<subject>-<module>.json`, lower case with hyphens.
 2. Run the validator over it until it prints `OK` (see *Validate*).
 3. Hand the file over. Use whatever file-delivery tool the environment offers
    (`SendUserFile`, `present_files`); if there is none, give the absolute path.
@@ -242,32 +242,75 @@ trimmed string as written; use it only when the precise form is the point.
 
 ---
 
-## Deck naming
+## Naming
+
+### The deck path
 
 ```
 Subject::Module
 Subject::Module::Topic        (only when a module genuinely needs splitting)
 ```
 
-**The subject level is load-bearing.** Daily limits attach to it, so subjects
-must be few and stable. Use the name of the course or exam, never a chapter:
+**The subject level is load-bearing.** Daily limits attach to it, it is what the
+user reads down the left of every screen, and two spellings of one course are
+two subjects with two separate budgets. So it has one job: name the subject.
 
-| Good | Bad |
+**Never a code.** Not a syllabus number, not a paper, not a year. `9709` is not
+a subject; Mathematics is, and 9709 is one board's number for part of it. The
+same goes for the module level.
+
+| Write this | Not this |
 |---|---|
-| `Mathematics::Linear Algebra` | `Linear Algebra` (chapter promoted to subject) |
+| `Mathematics::Pure 1` | `9709::Pure 1` |
+| `Mathematics::Pure 1` | `Maths` (abbreviated), `MATH` (shouted) |
+| `Computer Science::Data Representation` | `9618::Paper 1`, `CS::9618::P1` |
 | `Computer Science::Networks` | `CS::Networks::TCP::Handshake` (four levels) |
-| `CAIE 9618::Data Representation` | `9618 Paper 1 Revision Notes 2026` (dated, verbose) |
+| `Further Mathematics::Complex Numbers` | `FM 9231 2026 Revision` |
 
-Rules:
+The exam code is still worth keeping. It goes in **`tags`**, where the validator
+accepts it alongside the eight content tags and where it is searchable:
 
-- Two levels by default. Add a third only when a module has grown big enough
-  that the user would want to study its parts separately — that is a judgement
+```jsonc
+{ "deck": "Mathematics::Pure 1", "tags": ["formula", "9709"] }
+```
+
+Rules for every level:
+
+- **Two levels by default.** A third only when a module has grown big enough
+  that the user would want to study its parts separately. That is a judgement
   about their revision, not a card count.
-- Title Case. No dates, no years, no revision/notes/practice suffixes.
-- Reuse an existing subject exactly as spelled — a typo creates a second subject
-  with its own daily budget.
+- **The subject is a course, spelled out in full.** `Mathematics`, not `Math`,
+  `Maths`, `MATH` or `math`. `Computer Science`, not `CS`. `Physics`,
+  `Chemistry`, `Further Mathematics`, `Economics`. An admissions test is a
+  subject of its own: `TMUA`, `MAT`, `STEP` (those are names, not codes).
+- **The module is the syllabus's own topic name**, in Title Case, with its
+  numbering stripped: `1.2 Data Representation` becomes `Data Representation`.
+- **No dates, no years, no suffixes.** Not `Revision`, `Notes`, `Practice`,
+  `Batch 2`, `2026`. A deck outlives the sitting that made it.
+- **Reuse an existing subject exactly as spelled.** If the user has decks
+  already, ask for the list before inventing a name: the app's Import page has
+  a **Copy deck names** button that puts every existing path on the clipboard,
+  sub-decks included. Match one of those or say which new one you are creating
+  and why.
 - Set `deck` once at the top level; use the per-card override only when a batch
   genuinely spans modules.
+
+### Quiz names
+
+`name` is a title, not a path. Say what the quiz covers, in the user's words,
+with no code and no date: `Rank and Nullity`, `Subnetting`, `Integration by
+Parts`. `subject` must equal the subject level of the deck the material belongs
+to, spelled identically, so the quiz files under the same heading as its cards.
+
+| Write this | Not this |
+|---|---|
+| `"name": "Rank and Nullity"` | `"name": "9709 P1 Quiz 3 (2026)"` |
+| `"subject": "Mathematics"` | `"subject": "Mathematics::Linear Algebra"` |
+
+### `id`
+
+Lower case, dot-separated, stable across re-imports: `pure1.chain-rule`,
+`net.arp.purpose`. Prefix with a short form of the module, not the subject code.
 
 ---
 
@@ -366,15 +409,16 @@ Include one on every card. It makes an import repeatable: re-importing an edited
 card updates it instead of creating a duplicate.
 
 ```
-<subject-abbr>.<topic>.<slug>
+<module-abbr>.<topic>.<slug>
 
 la.eigenvector.def
 net.tcp.handshake-why-three
-9618.data-rep.twos-complement
+datarep.twos-complement.range
 ```
 
 Lower case, dot-separated, hyphens inside a segment, ASCII only, stable forever.
-When you revise a card's wording, keep its `id` — that is the whole point.
+Prefix with the module, never with a syllabus code (see *Naming*). When you
+revise a card's wording, keep its `id` — that is the whole point.
 Two cards sharing an `id` is an error: the second silently overwrites the first.
 
 ### Comparison cards
