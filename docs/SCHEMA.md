@@ -131,9 +131,23 @@ gets shown as the answer.
 
 ### Matching
 
-`match: "loose"` (the default) ignores case, surrounding whitespace, and
-punctuation — including full-width CJK punctuation. `match: "exact"` compares the
-trimmed string as written; use it when the exact form is the point.
+`match: "loose"` (the default) lowercases, collapses whitespace, and strips
+punctuation, including full-width CJK punctuation. What survives is compared for
+**exact equality** against each accepted answer, normalised the same way. There
+is no fuzzy matching: no edit distance, no stemming, no substring, no synonyms.
+`the derivative` does not match `derivative`, and `λ` does not match `lambda`,
+so list every form you will accept.
+
+Numbers are the one exception to the punctuation sweep. A decimal point between
+two digits is kept, because deleting it made `1.5` and `15` the same answer; a
+leading `.5` is read as `0.5`. A comma between digits *is* deleted, so `1,024`
+and `1024` match. Trailing zeros are significant: `0.50` does not match `0.5`.
+
+`match: "exact"` compares the trimmed string as written; use it when the precise
+form is the point.
+
+A cloze with several blanks is right only when every blank is right. Each blank
+is marked individually on screen, but the question scores as one.
 
 ### Unknown types
 

@@ -10,6 +10,7 @@
  */
 
 import { chromium } from 'playwright';
+import { matchesAny } from '../../web/js/questions/util.js';
 
 const BASE = process.argv[2] || 'http://127.0.0.1:8737';
 const failures = [];
@@ -18,6 +19,29 @@ let checks = 0;
 function check(label, condition) {
   checks += 1;
   if (!condition) failures.push(label);
+}
+
+// ── Answer matching ───────────────────────────────────────────────────────
+// A pure function, so it is checked here rather than through the DOM. The
+// decimal cases are the reason this block exists: the punctuation sweep used to
+// delete the point, so answering 15 to a question whose answer was 1.5 was
+// marked correct.
+for (const [given, accepted, want] of [
+  ['  Lambda ', 'lambda', true],
+  ['DERIVATIVE.', 'derivative', true],
+  ['why?', 'why', true],
+  ['the derivative', 'derivative', false],
+  ['1.5', '1.5', true],
+  ['15', '1.5', false],
+  ['3.14159', '314159', false],
+  ['.5', '0.5', true],
+  ['0.5', '.5', true],
+  ['0.50', '0.5', false],
+  ['1,024', '1024', true],
+  ['', 'anything', false],
+]) {
+  check(`${JSON.stringify(given)} ${want ? 'matches' : 'does not match'} ${JSON.stringify(accepted)}`,
+    matchesAny(given, [accepted]) === want);
 }
 
 async function call(method, args = []) {
