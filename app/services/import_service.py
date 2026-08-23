@@ -231,7 +231,7 @@ class ImportService:
                 "name": group["name"],
                 "subject": group["subject"],
                 "questions": len(group["questions"]),
-                "action": "replace" if existing else "create",
+                "action": self._quiz_action(group, existing),
             })
 
         return {
@@ -251,6 +251,21 @@ class ImportService:
         if not deck:
             return None
         return self.cards.find_by_front(deck["deck_id"], card["front"])
+
+    def _quiz_action(self, group: dict, existing) -> str:
+        """
+        What importing this group would do: create, replace, or nothing at all.
+
+        Re-importing a file you have not edited should say so and then do
+        nothing, so the preview has to ask the same question the commit does.
+        """
+        if not existing:
+            return "create"
+        renamed = (existing["name"] != group["name"]
+                   or (existing["subject"] or "") != (group["subject"] or ""))
+        if renamed or self.quizzes.questions_differ(existing["group_id"], group["questions"]):
+            return "replace"
+        return "unchanged"
 
     def _find_group(self, group: dict):
         if group["ext_id"]:
@@ -292,15 +307,23 @@ class ImportService:
         quiz_results = []
         for group in plan["quizzes"]:
             existing = self._find_group(group)
+            renamed = False
             if existing:
                 group_id = existing["group_id"]
-                self.quizzes.rename_group(group_id, group["name"], group["subject"])
-                action = "replaced"
+                renamed = (existing["name"] != group["name"]
+                           or (existing["subject"] or "") != (group["subject"] or ""))
+                if renamed:
+                    self.quizzes.rename_group(group_id, group["name"], group["subject"])
             else:
                 group_id = self.quizzes.create_group(
                     group["name"], group["subject"], group["ext_id"])
+            rewritten = self.quizzes.replace_questions(group_id, group["questions"])
+            if not existing:
                 action = "created"
-            self.quizzes.replace_questions(group_id, group["questions"])
+            elif rewritten or renamed:
+                action = "replaced"
+            else:
+                action = "unchanged"
             quiz_results.append({"name": group["name"], "questions": len(group["questions"]),
                                  "action": action, "group_id": group_id})
 

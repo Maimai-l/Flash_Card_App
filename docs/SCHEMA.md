@@ -70,10 +70,14 @@ as a duplicate and skipped. Tick *Import duplicates too* to override that.
 }
 ```
 
-Use `"quizzes": [ ... ]` to import several at once. Re-importing a quiz replaces
-its question list wholesale; past attempt scores are kept. A half-finished run of
-that quiz is discarded, because its saved answers point at questions that no
-longer exist.
+Use `"quizzes": [ ... ]` to import several at once.
+
+Re-importing a quiz compares its question list against the stored one first.
+Identical, in the same order, and nothing is written: the preview says
+*unchanged*, and a half-finished run of that quiz survives. If anything did
+change, the list is replaced wholesale and that run is discarded in the same
+step, because its saved answers point at questions that no longer exist. Past
+attempt scores are kept either way.
 
 ### Question types
 

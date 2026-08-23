@@ -222,6 +222,47 @@ await page.waitForSelector('.quiz-name');
 check('an untouched run does not linger in the list',
   await page.locator('.quiz-card [data-fresh="1"]').count() === 0);
 
+// ── Re-importing a quiz you have not edited ───────────────────────────────
+// Replacing the question list mints new ids, and a saved run stores the old
+// ones, so a blind replace threw away a quiz you were halfway through even when
+// the file had not changed by a byte.
+await page.click('.quiz-card .btn-primary');
+await page.waitForSelector('.opt');
+await page.click('.opt >> nth=0');
+await page.waitForTimeout(250);
+await page.keyboard.press('Enter');
+await page.waitForTimeout(250);
+await page.keyboard.press('Escape');
+await page.waitForSelector('.quiz-name');
+
+await page.click('.nav-link:has-text("Import")');
+await page.waitForSelector('#import-text');
+await page.fill('#import-text', JSON.stringify(CARDS));
+await page.click('button:has-text("Validate")');
+await page.waitForSelector('.preview-figures');
+check('the preview says the quiz is unchanged rather than replaced',
+  (await page.locator('.preview-figures ~ * .chip, .chip').last().textContent()).trim()
+    .toLowerCase() === 'unchanged');
+await page.click('[data-action="commitImport"]');
+await page.waitForTimeout(900);
+
+await page.click('.nav-link:has-text("Quiz")');
+await page.waitForSelector('.quiz-name');
+check('the half-finished run survives an unedited re-import',
+  await page.locator('.quiz-card [data-fresh="1"]').count() === 1);
+await page.click('.quiz-card .btn-primary');
+await page.waitForSelector('.q-card');
+check('and Resume still lands where it stopped',
+  (await page.locator('.counter').textContent()).trim().startsWith('2'));
+await page.keyboard.press('Escape');
+await page.waitForSelector('.quiz-name');
+await page.click('.quiz-card [data-fresh="1"]');
+await page.waitForSelector('.modal');
+await page.click('.modal .btn-danger');
+await page.waitForSelector('.q-card');
+await page.keyboard.press('Escape');
+await page.waitForSelector('.quiz-name');
+
 // ── Cards ─────────────────────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Cards")');
 await page.waitForSelector('.card-row');

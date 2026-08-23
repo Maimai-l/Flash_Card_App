@@ -60,22 +60,55 @@ class QuizRepository(Repository):
 
     # ── Questions ─────────────────────────────────────────────────────────
 
-    def replace_questions(self, group_id: int, questions: list[dict]) -> int:
-        """Swap a group's entire question list. Re-importing a group replaces it."""
+    @staticmethod
+    def _encode(questions: list[dict]) -> list[tuple[str, str]]:
+        """The (type, payload) pairs a question list is stored as."""
+        return [(str(q.get("type", "")), json.dumps(q, ensure_ascii=False)) for q in questions]
+
+    def questions_differ(self, group_id: int, questions: list[dict]) -> bool:
+        """
+        Would writing this list actually change anything?
+
+        Compared as stored, in order, so the answer is the same one
+        `replace_questions` will act on and the preview cannot promise something
+        the commit does not do.
+        """
+        current = self._all(
+            "SELECT type, payload FROM Quiz_Question WHERE group_id = ? ORDER BY position",
+            (int(group_id),),
+        )
+        return [(r["type"], r["payload"]) for r in current] != self._encode(questions)
+
+    def replace_questions(self, group_id: int, questions: list[dict]) -> bool:
+        """
+        Swap a group's question list, and say whether that was necessary.
+
+        An identical re-import is a no-op. That matters beyond saving two
+        statements: DELETE and INSERT mint new question_ids, an in-flight run
+        stores the old ones, and the run is discarded when they no longer
+        resolve. Re-importing an unchanged file used to throw away a quiz you
+        were halfway through.
+
+        When the questions really do change, that run cannot survive, so it goes
+        in the same transaction rather than being left for the next `start` to
+        notice. Otherwise the list keeps offering *Resume* on a run that no
+        longer exists.
+        """
+        if not self.questions_differ(group_id, questions):
+            return False
         conn = self.db.connect()
         try:
             conn.execute("DELETE FROM Quiz_Question WHERE group_id = ?", (int(group_id),))
             conn.executemany(
                 "INSERT INTO Quiz_Question (group_id, position, type, payload) VALUES (?, ?, ?, ?)",
-                [
-                    (int(group_id), i, str(q.get("type", "")), json.dumps(q, ensure_ascii=False))
-                    for i, q in enumerate(questions)
-                ],
+                [(int(group_id), i, t, payload)
+                 for i, (t, payload) in enumerate(self._encode(questions))],
             )
+            conn.execute("DELETE FROM Quiz_Progress WHERE group_id = ?", (int(group_id),))
             conn.commit()
         finally:
             conn.close()
-        return len(questions)
+        return True
 
     def get_questions(self, group_id: int) -> list[dict]:
         rows = self._all(

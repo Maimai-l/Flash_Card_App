@@ -10,6 +10,11 @@ import { $content, esc, attr, showToast, showModal } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { render } from '../core/router.js';
 
+/* A quiz you have already imported and not edited is left alone, so the preview
+   has a third thing to say beyond create and replace. */
+const QUIZ_CHIP = { create: 'chip-new', replace: 'chip-learning', unchanged: 'chip-suspended' };
+const QUIZ_LABEL = { create: 'will_create', replace: 'will_replace', unchanged: 'will_keep' };
+
 function state() {
   if (!S.importView) S.importView = { text: '', deck: '', preview: null, duplicates: false };
   return S.importView;
@@ -109,8 +114,8 @@ function previewHtml(preview) {
 
       ${(preview.quizzes || []).map((quiz) => `
         <div class="mt8 sub small">${esc(quiz.name)} \u00b7 ${quiz.questions} ${esc(t('questions'))}
-          <span class="chip ${quiz.action === 'replace' ? 'chip-learning' : 'chip-new'}">${
-            esc(quiz.action === 'replace' ? t('will_replace') : t('will_create'))}</span></div>`).join('')}
+          <span class="chip ${QUIZ_CHIP[quiz.action] || ''}">${
+            esc(t(QUIZ_LABEL[quiz.action] || 'will_create'))}</span></div>`).join('')}
 
       ${(preview.issues || []).length ? `
         <div class="issue-list">

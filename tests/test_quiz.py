@@ -152,16 +152,52 @@ def test_finishing_clears_the_saved_run(context):
     assert context.quiz.start(group_id, resume=True)["resumed"] is None
 
 
-def test_reimporting_the_quiz_discards_a_run_that_points_at_old_questions(context):
-    """Re-import replaces the questions and mints new ids. Resuming into that
-    would show new questions against old answers."""
+EDITED_QUIZ = json.dumps({"quiz": {
+    "id": "q.long", "name": "Ten questions", "subject": "CS",
+    "questions": [
+        {"type": "mcq", "prompt": f"Question {i}, reworded?", "options": ["a", "b", "c", "d"],
+         "answer": i % 4, "explain": "Because."}
+        for i in range(10)
+    ],
+}})
+
+
+def test_reimporting_an_edited_quiz_discards_the_run_that_points_at_old_questions(context):
+    """An edited re-import replaces the questions and mints new ids. Resuming
+    into that would show new questions against old answers."""
     group_id, old_ids = start_and_answer(context, 6)
 
-    context.imports.commit(LONG_QUIZ)             # same quiz id → questions replaced
+    context.imports.commit(EDITED_QUIZ)           # same quiz id, different questions
     new_ids = [q["question_id"] for q in context.quiz.start(group_id, resume=True)["questions"]]
     assert set(new_ids).isdisjoint(old_ids)
     assert context.quiz.start(group_id, resume=True)["resumed"] is None
     assert context.quizzes.get_progress(group_id) is None
+
+
+def test_the_list_stops_offering_resume_the_moment_the_questions_change(context):
+    """The run is dropped inside the same transaction as the replace. Leaving it
+    for the next start() to notice left the list showing Resume on a run that
+    would silently restart from question one."""
+    group_id, _ = start_and_answer(context, 6)
+    assert context.quiz.list_groups()[0]["in_progress"] is True
+
+    context.imports.commit(EDITED_QUIZ)
+    assert context.quizzes.get_progress(group_id) is None
+    assert context.quiz.list_groups()[0]["in_progress"] is False
+
+
+def test_reimporting_an_unedited_quiz_leaves_the_run_alone(context):
+    """The whole point of comparing: re-importing the file you already imported
+    must not cost you the questions you have already answered."""
+    group_id, old_ids = start_and_answer(context, 6)
+
+    context.imports.commit(LONG_QUIZ)             # byte for byte what is stored
+    assert [q["question_id"] for q in context.quizzes.get_questions(group_id)] == old_ids
+
+    resumed = context.quiz.start(group_id, resume=True)
+    assert resumed["resumed"] is not None
+    assert resumed["resumed"]["position"] == 6
+    assert context.quiz.list_groups()[0]["progress_answered"] == 6
 
 
 def test_corrupt_progress_is_dropped_rather_than_resumed(context):

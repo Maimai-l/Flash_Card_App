@@ -94,10 +94,58 @@ def test_quiz_import_and_replace(context):
     assert result["quizzes"][0]["action"] == "created"
     assert result["quizzes"][0]["questions"] == 4
 
-    again = context.imports.commit(json.dumps(QUIZ))
+    edited = json.loads(json.dumps(QUIZ))
+    edited["quiz"]["questions"][0]["prompt"] = "Which one, really?"
+    again = context.imports.commit(json.dumps(edited))
     assert again["quizzes"][0]["action"] == "replaced"
     assert len(context.quizzes.list_groups()) == 1
     assert context.quizzes.list_groups()[0]["question_count"] == 4
+
+
+def test_reimporting_an_unedited_quiz_changes_nothing(context):
+    """Identical in, nothing out. DELETE and INSERT would mint new question ids
+    and take a half-finished run down with them."""
+    context.imports.commit(json.dumps(QUIZ))
+    group_id = context.quizzes.list_groups()[0]["group_id"]
+    before = [q["question_id"] for q in context.quizzes.get_questions(group_id)]
+
+    assert context.imports.preview(json.dumps(QUIZ))["quizzes"][0]["action"] == "unchanged"
+    again = context.imports.commit(json.dumps(QUIZ))
+    assert again["quizzes"][0]["action"] == "unchanged"
+    assert [q["question_id"] for q in context.quizzes.get_questions(group_id)] == before
+
+
+def test_renaming_a_quiz_counts_as_a_change(context):
+    context.imports.commit(json.dumps(QUIZ))
+    renamed = json.loads(json.dumps(QUIZ))
+    renamed["quiz"]["name"] = "LA basics, revised"
+    # matched on name+subject when there is no id, so give it one to keep it the
+    # same group rather than a second one
+    body = json.loads(json.dumps(QUIZ))
+    body["quiz"]["id"] = "la.basics"
+    context.imports.commit(json.dumps(body))
+    body["quiz"]["name"] = "LA basics, revised"
+    assert context.imports.preview(json.dumps(body))["quizzes"][0]["action"] == "replace"
+    assert context.imports.commit(json.dumps(body))["quizzes"][0]["action"] == "replaced"
+    assert any(g["name"] == "LA basics, revised" for g in context.quizzes.list_groups())
+
+
+def test_the_preview_promises_what_the_commit_does(context):
+    """Three states, and the preview has to name the same one every time."""
+    for payload, predicted, done in [
+        (QUIZ, "create", "created"),
+        (QUIZ, "unchanged", "unchanged"),
+    ]:
+        text = json.dumps(payload)
+        assert context.imports.preview(text)["quizzes"][0]["action"] == predicted
+        assert context.imports.commit(text)["quizzes"][0]["action"] == done
+
+    edited = json.loads(json.dumps(QUIZ))
+    edited["quiz"]["questions"].append(
+        {"type": "short", "prompt": "And this?", "answers": ["yes"]})
+    text = json.dumps(edited)
+    assert context.imports.preview(text)["quizzes"][0]["action"] == "replace"
+    assert context.imports.commit(text)["quizzes"][0]["action"] == "replaced"
 
 
 def test_unknown_question_type_warns_and_is_dropped(context):

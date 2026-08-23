@@ -71,7 +71,7 @@ const en = {
   allow_duplicates: 'Import duplicates too',
   import_done: 'Imported {new} new, {updated} updated',
   import_empty: 'Paste some JSON first.',
-  will_create: 'create', will_replace: 'replace',
+  will_create: 'create', will_replace: 'replace', will_keep: 'unchanged',
   export_title: 'Export', export_cards: 'Export cards', export_copied: 'Copied to clipboard',
   download: 'Download',
 
@@ -170,7 +170,7 @@ const zh = {
   allow_duplicates: '重复的也导入',
   import_done: '已导入 {new} 张新卡，更新 {updated} 张',
   import_empty: '先粘贴 JSON。',
-  will_create: '新建', will_replace: '替换',
+  will_create: '新建', will_replace: '替换', will_keep: '未改动',
   export_title: '导出', export_cards: '导出卡片', export_copied: '已复制到剪贴板',
   download: '下载',
 
