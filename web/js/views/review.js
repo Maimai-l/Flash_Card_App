@@ -108,7 +108,7 @@ function footHtml() {
   return `
     <div class="rating-row">
       ${RATINGS.map(({ value, key }) => `
-        <button class="rating-btn ${value === 3 ? 'main' : ''}" data-action="rate" data-rating="${value}">
+        <button class="rating-btn" data-action="rate" data-rating="${value}">
           <span class="label">${esc(t(key))}</span>
           <span class="interval">${esc((card.intervals || {})[value] || '')}</span>
         </button>`).join('')}

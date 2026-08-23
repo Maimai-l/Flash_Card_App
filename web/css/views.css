@@ -289,11 +289,11 @@
 .rating-btn .interval {
   font-size: 11.5px; font-weight: 600; color: var(--grey-3); font-variant-numeric: tabular-nums;
 }
-/* Good is the answer most reviews get, so it is the one that looks like the
-   default. The other three are not colour-coded; they are not judgements. */
-.rating-btn.main { background: var(--blue); border-color: var(--blue); color: #fff; }
-.rating-btn.main:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
-.rating-btn.main .interval { color: rgba(255, 255, 255, .75); }
+/* All four weigh the same, deliberately. Good is the answer most reviews get,
+   which is exactly why filling it in was wrong: this rating is the only input
+   FSRS ever receives, and pushing you towards one of the four with colour buys
+   a faster click at the cost of a less true answer. Nothing here is a default
+   and nothing here is a verdict, so nothing here is coloured. */
 
 .reveal-row { display: flex; align-items: center; gap: 10px; }
 
