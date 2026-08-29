@@ -433,6 +433,12 @@ datarep.twos-complement.range
 Lower case, dot-separated, hyphens inside a segment, ASCII only, stable forever.
 Prefix with the module, never with a syllabus code (see *Naming*). When you
 revise a card's wording, keep its `id` — that is the whole point.
+
+The app can hand its own state over as a `{"kc_export": ...}` block (wrong quiz
+answers, cards the user keeps failing, a study report). Treat it as source
+material like any notes. The ids inside it are live: a rewrite of an exported
+card keeps its `id` so the import updates that card in place; only genuinely
+new cards get new ids.
 Two cards sharing an `id` is an error: the second silently overwrites the first.
 
 ### Comparison cards

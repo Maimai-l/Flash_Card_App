@@ -83,7 +83,11 @@ await call('import_commit', [JSON.stringify({
 const browser = await chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM || '/opt/pw-browsers/chromium',
 });
-const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+const page = await browser.newPage({
+  viewport: { width: 1280, height: 860 },
+  permissions: ['clipboard-read', 'clipboard-write'],
+});
+const readClipboard = () => page.evaluate(() => navigator.clipboard.readText());
 page.setDefaultTimeout(8000);
 
 const consoleErrors = [];
@@ -116,6 +120,8 @@ await page.waitForSelector('.card-front');
 check('maths renders on the front', await page.locator('.card-front .katex').count() > 0);
 check('no rating buttons before the answer', await page.locator('.rating-btn').count() === 0);
 
+check('review shows the same thin progress bar the quiz does',
+  await page.locator('.quiz-progress').count() === 1);
 await page.keyboard.press(' ');
 await page.waitForSelector('.rating-btn');
 check('four ratings, each with an interval',
@@ -144,15 +150,29 @@ await page.waitForSelector('.card-back');
 check('inline edit is visible immediately',
   (await page.locator('.card-back').textContent()).includes('Edited during review'));
 
+let ratedHardOnce = false;
 for (let i = 0; i < 60; i++) {
   if (await page.locator('.session-done').count()) break;
-  if (await page.locator('.rating-btn').count()) await page.keyboard.press('3');
-  else if (await page.locator('button:has-text("Show answer")').count()) await page.keyboard.press(' ');
+  if (await page.locator('.rating-btn').count()) {
+    await page.keyboard.press(ratedHardOnce ? '3' : '2');
+    ratedHardOnce = true;
+  } else if (await page.locator('button:has-text("Show answer")').count()) await page.keyboard.press(' ');
   await page.waitForTimeout(180);
 }
 check('the session reaches a summary', await page.locator('.session-done').count() === 1);
 check('summary offers more study without obligation',
   await page.locator('button:has-text("Study more")').count() === 1);
+
+// ── Handing struggles to an AI ────────────────────────────────────────────
+check('the summary offers the struggled cards',
+  await page.locator('[data-action="copyStruggles"]').count() === 1);
+await page.click('[data-action="copyStruggles"]');
+await page.waitForTimeout(300);
+const strugglesText = await readClipboard();
+check('struggles copy as a kc_export block',
+  strugglesText.includes('"kind": "struggles"') && strugglesText.includes('"rated": "hard"'));
+check('struggles carry the deck and a stable id',
+  strugglesText.includes('Mathematics::Linear Algebra'));
 await page.click('button:has-text("Done")');
 await page.waitForSelector('.hero-card');
 
@@ -180,8 +200,17 @@ await page.waitForTimeout(300);
 check('cloze is graded, not advanced, by one Enter',
   await page.locator('.cloze-blank.correct').count() === 2);
 
+// Typing must enable the Check button itself; Enter is not the only door.
 await page.keyboard.press('Enter');
 await page.waitForSelector('#short-input');
+check('typing enables Check for mouse users',
+  await page.evaluate(() => {
+    const input = document.getElementById('short-input');
+    input.value = 'probe';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return !document.getElementById('q-check').disabled;
+  }));
+await page.fill('#short-input', '');
 await page.fill('#short-input', '  Lambda ');
 await page.keyboard.press('Enter');
 await page.waitForTimeout(300);
@@ -199,6 +228,11 @@ check('results show a score out of four',
   (await page.locator('.result-score').textContent()).includes('/ 4'));
 check('wrong answers can be retried alone',
   await page.locator('button:has-text("Retry wrong")').count() === 1);
+await page.click('[data-action="copyQuizForAI"]');
+await page.waitForTimeout(300);
+const quizText = await readClipboard();
+check('wrong answers copy as a kc_export block',
+  quizText.includes('"kind": "quiz_wrong"') && quizText.includes('"my_answer"'));
 await page.click('button:has-text("Done")');
 await page.waitForSelector('.quiz-name');
 check('the attempt is recorded',
@@ -333,6 +367,11 @@ await page.click('.nav-link:has-text("Stats")');
 await page.waitForSelector('.stat-grid');
 check('stats report the reviews just made',
   Number((await page.locator('.stat-value').nth(1).textContent()).trim()) > 0);
+await page.click('[data-action="exportReport"]');
+await page.waitForTimeout(400);
+const reportText = await readClipboard();
+check('the study report copies as a kc_export block',
+  reportText.includes('"kind": "report"') && reportText.includes('"due_next_7_days"'));
 
 // ── Settings and language ─────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Settings")');
@@ -483,6 +522,23 @@ await page.waitForSelector('#import-text');
 check('Import offers the deck names, and does not repeat the skill\'s schema',
   await page.locator('[data-action="copyDecks"]').count() === 1
   && await page.locator('[data-action="copySchema"]').count() === 0);
+
+// ── Keyboard niceties ─────────────────────────────────────────────────────
+await page.click('.nav-link:has-text("Cards")');
+await page.waitForSelector('.card-row');
+await page.click('button:has-text("New card")');
+await page.waitForSelector('.modal');
+check('opening a dialog moves focus into it',
+  await page.evaluate(() => document.activeElement.closest('.modal') !== null));
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
+
+await page.keyboard.press('?');
+await page.waitForSelector('.shortcut-grid');
+check('? opens the shortcut overview',
+  (await page.locator('.shortcut-row').count()) >= 8);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
 
 check('no console errors anywhere', consoleErrors.length === 0);
 

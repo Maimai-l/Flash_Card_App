@@ -67,7 +67,12 @@ export async function renderQuizList() {
   if (!groups.length) {
     $content().innerHTML = `
       <div class="page">${head}
-        <div class="card"><div class="empty">${esc(t('no_quizzes'))}</div></div>
+        <div class="card"><div class="empty">
+          <div class="empty-glyph"></div>
+          ${esc(t('no_quizzes'))}<br>
+          <button class="btn btn-secondary btn-sm" data-action="navigate"
+                  data-page="import">${esc(t('nav_import'))}</button>
+        </div></div>
       </div>`;
     return;
   }

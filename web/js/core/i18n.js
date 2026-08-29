@@ -101,6 +101,18 @@ const en = {
   reset_done: 'All data deleted',
   about: 'About', version: 'Version',
 
+  copy_for_ai: 'Copy for AI', copied_for_ai: 'Copied. Paste it to your AI.',
+  copy_struggles: 'Copy struggles',
+  export_report: 'Export study report',
+  ai_quiz_intro: 'From my flashcard app: quiz "{name}" ({subject}), I got {wrong} of {total} wrong. The questions, my answers and the correct ones:',
+  ai_struggles_intro: 'From my flashcard app: {n} cards I just rated Again or Hard. Card ids are stable, so a rewritten card that keeps its id will update in place when I re-import it:',
+  ai_report_intro: 'From my flashcard app: my current study state across all subjects.',
+
+  shortcuts: 'Keyboard shortcuts',
+  sc_rate: 'Rate the card', sc_pick: 'Pick an option', sc_flip: 'Turn the card',
+  sc_anywhere: 'Anywhere', sc_review: 'Reviewing', sc_browsing: 'Browsing', sc_quiz: 'In a quiz',
+  sc_check_advance: 'Check, then advance', sc_leave: 'Leave the session', sc_help: 'This overview',
+
   saved: 'Saved', error: 'Something went wrong',
 };
 
@@ -199,6 +211,18 @@ const zh = {
   reset_confirm: '删除全部卡片、卡组和测验？此操作无法撤销。',
   reset_done: '数据已清空',
   about: '关于', version: '版本',
+
+  copy_for_ai: '复制给 AI', copied_for_ai: '已复制，去粘贴给你的 AI。',
+  copy_struggles: '复制难点',
+  export_report: '导出学习报告',
+  ai_quiz_intro: '来自我的记忆卡片 app：测验 "{name}"（{subject}），{total} 题错了 {wrong} 题。题目、我的作答和正确答案如下：',
+  ai_struggles_intro: '来自我的记忆卡片 app：刚才被我评为"重来 / 困难"的 {n} 张卡。卡片 id 是稳定的，重写时保留 id，重新导入就会原地更新：',
+  ai_report_intro: '来自我的记忆卡片 app：各学科当前的学习状态。',
+
+  shortcuts: '快捷键',
+  sc_rate: '为卡片评分', sc_pick: '选择选项', sc_flip: '翻面',
+  sc_anywhere: '任意界面', sc_review: '复习时', sc_browsing: '浏览时', sc_quiz: '做题时',
+  sc_check_advance: '检查，再前进', sc_leave: '退出当前会话', sc_help: '本总览',
 
   saved: '已保存', error: '出错了',
 };

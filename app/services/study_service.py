@@ -141,6 +141,7 @@ class StudyService:
             by_path[deck["path"]] = {
                 "path": deck["path"],
                 "name": deck["name"],
+                "deck_id": deck["deck_id"],
                 "depth": deck["path"].count("::"),
                 "new_limit": deck["new_limit"],
                 "review_limit": deck["review_limit"],
@@ -201,6 +202,7 @@ class StudyService:
     def _present(self, row: dict, intervals: bool = True) -> dict:
         card = {
             "card_id": row["card_id"],
+            "ext_id": row["ext_id"],
             "front": row["front"],
             "back": row["back"],
             "hint": row["hint"],

@@ -136,7 +136,8 @@ export async function renderCards() {
         <div class="card-list" id="cards-body"></div>
         <div class="list-end" id="cards-footer"></div>
         <div id="cards-sentinel" aria-hidden="true"></div>
-      ` : `<div class="card"><div class="empty">${esc(t('no_cards_found'))}</div></div>`}
+      ` : `<div class="card"><div class="empty">
+            <div class="empty-glyph"></div>${esc(t('no_cards_found'))}</div></div>`}
     </div>`;
 
   paintRows();

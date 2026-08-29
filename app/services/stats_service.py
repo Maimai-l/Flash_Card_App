@@ -7,15 +7,18 @@ into a failure. What is here describes what happened, not what should have.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 from ..db.deck_repo import normalise_path
 
 
 class StatsService:
-    def __init__(self, decks, cards):
+    def __init__(self, decks, cards, quizzes=None, settings=None, study=None):
         self.decks = decks
         self.cards = cards
+        self.quizzes = quizzes
+        self.settings = settings
+        self.study = study
 
     def _deck_ids(self, deck_path: str):
         return self.decks.descendant_ids(deck_path) if normalise_path(deck_path) else None
@@ -56,4 +59,80 @@ class StatsService:
                 }
                 for c in self.cards.hardest_cards(deck_ids, 15)
             ],
+        }
+
+    # ── Export for an AI ──────────────────────────────────────────────────
+
+    def ai_report(self) -> dict:
+        """
+        The study state as one object, written to be handed to a model.
+
+        This is data, not interface: the due_next_7_days figure exists so a
+        planner can weigh the week, and it never appears on a screen. The app
+        does not explain, coach or plan; it hands over what happened and lets
+        the conversation do the rest.
+        """
+        local_now = datetime.now().astimezone()
+        horizon = datetime.combine(
+            local_now.date() + timedelta(days=8), time.min, tzinfo=local_now.tzinfo,
+        ).astimezone(timezone.utc).isoformat()
+        month_ago = (date.today() - timedelta(days=29)).isoformat()
+
+        subjects = []
+        for deck in self.decks.all_decks():
+            if "::" in deck["path"]:
+                continue
+            overview = self.study.overview(deck["path"])
+            deck_ids = self.decks.descendant_ids(deck["path"])
+            ratings = self.cards.rating_totals(deck_ids, month_ago)
+            answers = sum(ratings.values())
+            subjects.append({
+                "subject": deck["path"],
+                "total_cards": overview["total_cards"],
+                "states": overview["states"],
+                "limits": {
+                    "new": None if overview["unlimited_new"] else overview["new_limit"],
+                    "review": None if overview["unlimited_review"] else overview["review_limit"],
+                },
+                "today": {
+                    "new_done": overview["new_done"],
+                    "review_done": overview["review_done"],
+                    "new_waiting": overview["new_available"],
+                    "review_waiting": overview["review_available"],
+                },
+                # Both cursors at the horizon: this is workload ahead, so a
+                # learning step due tonight belongs in it as much as a review
+                # due on Thursday.
+                "due_next_7_days": self.cards.count_due(deck_ids, horizon, horizon),
+                "answers_30d": answers,
+                "again_rate_30d": round(ratings.get("1", 0) / answers, 3) if answers else None,
+                "hardest": [
+                    {"id": c.get("ext_id"), "front": c["front"], "lapses": c["lapses"]}
+                    for c in self.cards.hardest_cards(deck_ids, 5)
+                ],
+            })
+
+        quizzes = [
+            {
+                "name": g["name"],
+                "subject": g["subject"] or "",
+                "questions": g["question_count"],
+                "attempts": g["attempts"],
+                "last": ({"correct": g["last_correct"], "total": g["last_total"],
+                          "taken": g["last_taken"]} if g["attempts"] else None),
+                "in_progress": bool(g["progress_total"]),
+            }
+            for g in self.quizzes.list_groups()
+        ]
+
+        return {
+            "kc_export": 1,
+            "kind": "report",
+            "generated": local_now.isoformat(timespec="seconds"),
+            "defaults": {
+                "new_limit": int(self.settings.get("default_new_limit", "10")),
+                "review_limit": int(self.settings.get("default_review_limit", "60")),
+            },
+            "subjects": subjects,
+            "quizzes": quizzes,
         }

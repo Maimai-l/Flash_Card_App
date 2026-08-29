@@ -14,6 +14,7 @@ import { rich } from '../core/render.js';
 import { t } from '../core/i18n.js';
 import { navigate } from '../core/router.js';
 import { questionType, questionLabel, questionPrompt } from '../questions/index.js';
+import { copyForAI } from '../core/aicopy.js';
 
 export async function renderQuizRun() {
   if (S.quizStart) {
@@ -116,7 +117,7 @@ function paint() {
           <div id="q-root">${type.render(question, state)}</div>
           ${showCheck ? `
             <div class="q-actions">
-              <button class="btn btn-primary" data-action="submitQuestion"
+              <button class="btn btn-primary" id="q-check" data-action="submitQuestion"
                       ${canSubmit ? '' : 'disabled'}>${esc(t('check'))}</button>
               <span class="kbd">Enter</span>
             </div>` : ''}
@@ -140,7 +141,12 @@ function paint() {
   type.mount(root, question, state, {
     setResponse: (response, options = {}) => {
       state.response = response;
-      if (!options.silent) paint();
+      if (!options.silent) return paint();
+      // Typing updates state without a repaint so the input keeps focus, but
+      // the Check button is part of the repaint. Flip it directly, or a mouse
+      // user types an answer into a button that still looks and acts disabled.
+      const checkButton = document.getElementById('q-check');
+      if (checkButton) checkButton.disabled = !type.canSubmit(question, state);
     },
     submit: () => submitCurrent(),
   });
@@ -228,6 +234,9 @@ function paintResults() {
             ${wrongCount ? `
               <button class="btn btn-secondary" data-action="retryWrong">
                 ${esc(t('retry_wrong', { n: wrongCount }))}
+              </button>
+              <button class="btn btn-secondary" data-action="copyQuizForAI">
+                ${esc(t('copy_for_ai'))}
               </button>` : ''}
           </div>
         </div>
@@ -244,6 +253,37 @@ function paintResults() {
 
 export const actions = {
   submitQuestion: () => submitCurrent(),
+
+  /* The wrong questions, my answers, the right ones. Framing only; whether the
+     conversation explains, drills or writes patch cards is decided there. */
+  copyQuizForAI: () => {
+    const quiz = S.quiz;
+    if (!quiz) return;
+    const wrong = quiz.questions
+      .map((question, index) => ({ question, state: quiz.states[index] }))
+      .filter(({ state }) => !state.correct)
+      .map(({ question, state }) => {
+        const type = questionType(question.type);
+        const summary = type ? type.summary(question, state.response) : { given: '', correct: '' };
+        const { question_id, ...body } = question;
+        return { ...body, my_answer: summary.given, correct_answer: summary.correct };
+      });
+    const correct = quiz.states.filter((s) => s.correct).length;
+    copyForAI(
+      t('ai_quiz_intro', {
+        name: quiz.name, subject: quiz.subject || '',
+        wrong: wrong.length, total: quiz.questions.length,
+      }),
+      {
+        kc_export: 1,
+        kind: 'quiz_wrong',
+        quiz: quiz.name,
+        subject: quiz.subject || '',
+        score: { correct, total: quiz.questions.length },
+        wrong,
+      },
+    );
+  },
 
   nextQuestion: () => {
     if (S.quiz.index >= S.quiz.questions.length - 1) return finish();

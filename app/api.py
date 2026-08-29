@@ -227,6 +227,10 @@ class Api:
     # ── Stats ─────────────────────────────────────────────────────────────
 
     @api_call
+    def get_ai_report(self):
+        return self.ctx.stats.ai_report()
+
+    @api_call
     def get_stats(self, deck=""):
         return self.ctx.stats.summary(deck)
 

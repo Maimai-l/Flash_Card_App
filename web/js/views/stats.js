@@ -5,6 +5,7 @@ import { api } from '../core/api.js';
 import { $content, esc, clip } from '../core/dom.js';
 import { plain } from '../core/render.js';
 import { t } from '../core/i18n.js';
+import { copyForAI } from '../core/aicopy.js';
 
 /* Darkest for the answers you struggled with, lightest for the ones you did
    not. One ramp, so the chart reads as a gradient rather than a verdict. */
@@ -57,6 +58,10 @@ export async function renderStats() {
         <h1>${esc(S.deck ? S.deck.split('::').pop() : t('all_decks'))}</h1>
       </div>
 
+      <div class="mb16">
+        <button class="btn btn-secondary btn-sm" data-action="exportReport">${esc(t('export_report'))}</button>
+      </div>
+
       <div class="stat-grid">
         <div class="card stat-card">
           <div class="stat-head">
@@ -90,4 +95,12 @@ export async function renderStats() {
     </div>`;
 }
 
-export const actions = {};
+export const actions = {
+  /* The whole library's state as one block, whatever deck the page is scoped
+     to: a planner needs the full picture or none. */
+  exportReport: async () => {
+    const report = await api.get_ai_report();
+    if (report.error) return;
+    await copyForAI(t('ai_report_intro'), report);
+  },
+};

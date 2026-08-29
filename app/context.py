@@ -40,4 +40,5 @@ class AppContext:
         self.study = StudyService(self.decks, self.cards, self.settings, self.fsrs)
         self.quiz = QuizService(self.quizzes)
         self.imports = ImportService(self.decks, self.cards, self.quizzes)
-        self.stats = StatsService(self.decks, self.cards)
+        self.stats = StatsService(self.decks, self.cards,
+                          quizzes=self.quizzes, settings=self.settings, study=self.study)

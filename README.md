@@ -70,6 +70,22 @@ authoring skill below, which is where it stays in step with the importer.
 The format is documented in [docs/SCHEMA.md](docs/SCHEMA.md). Sample files live
 in [samples/](samples/).
 
+## Handing your progress to an AI
+
+The app does not explain, coach or generate; your AI conversation does. What
+the app owes that conversation is data it can read cold, so three places offer
+a one-click copy, each a sentence of framing plus versioned JSON:
+
+- **Quiz results** · *Copy for AI*: the questions you got wrong, your answers
+  and the correct ones.
+- **Session finished** · *Copy struggles*: the cards you just rated Again or
+  Hard, with their ids.
+- **Stats** · *Export study report*: every subject's state, limits, the next
+  week's load, recall rates and quiz history, for planning.
+
+Card ids make the loop closed: ask for a struggling card to be rewritten, keep
+its id, re-import, and the card updates in place instead of duplicating.
+
 ## Window layout
 
 Every page opens with the same two lines: a small label and a title, at a fixed

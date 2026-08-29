@@ -44,6 +44,7 @@ export async function render({ silent = false } = {}) {
   // line-breaking, which differs between the two languages.
   document.documentElement.dataset.lang = S.lang;
   document.documentElement.lang = S.lang === 'zh' ? 'zh-Hans' : 'en';
+  document.title = full ? t('app') : `${t('app')} \u00b7 ${t('nav_' + S.page)}`;
   document.getElementById('topbar').hidden = full;
   document.getElementById('sidebar').hidden = route.chrome !== 'app';
   document.getElementById('body').classList.toggle('full', full);

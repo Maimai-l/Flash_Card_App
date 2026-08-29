@@ -14,6 +14,7 @@ import { $content, esc, attr, showToast, setKeys, typingInInput, showModal, clos
 import { flashcardHtml, setFlipped } from './flashcard.js';
 import { t } from '../core/i18n.js';
 import { navigate } from '../core/router.js';
+import { copyForAI } from '../core/aicopy.js';
 
 const RATINGS = [
   { value: 1, key: 'again' },
@@ -37,6 +38,9 @@ export async function renderReview() {
       answers: 0,
       seen: new Set(),
       counts: { 1: 0, 2: 0, 3: 0, 4: 0 },
+      // card_id -> the card as last rated Again or Hard, kept so the summary
+      // can hand exactly these to an AI
+      struggles: new Map(),
       extra: false,
     };
     nextCard();
@@ -57,7 +61,7 @@ function progress() {
   return { done: session.answers, total: session.answers + remaining };
 }
 
-function shell(inner, { counter = '', foot = null, controls = '' } = {}) {
+function shell(inner, { counter = '', foot = null, controls = '', percent = null } = {}) {
   const deckLabel = S.deck ? S.deck.split('::').pop() : t('all_decks');
   return `
     <div class="study">
@@ -67,6 +71,8 @@ function shell(inner, { counter = '', foot = null, controls = '' } = {}) {
         <span class="counter">${esc(counter)}</span>
         ${controls}
       </div>
+      ${percent === null ? '' : `
+        <div class="quiz-progress"><span style="width:${percent}%"></span></div>`}
       <div class="study-body"><div class="study-inner">${inner}</div></div>
       ${foot === null ? '' : `<div class="study-foot" id="study-foot">${foot}</div>`}
     </div>`;
@@ -91,7 +97,8 @@ function paint() {
 
   $content().innerHTML = shell(
     flashcardHtml(card, { flipped: session.revealed, hintShown: session.hintShown }),
-    { counter: `${done} / ${total}`, foot: footHtml(), controls: controlsHtml() },
+    { counter: `${done} / ${total}`, foot: footHtml(), controls: controlsHtml(),
+      percent: Math.round(100 * done / Math.max(1, total)) },
   );
   setKeys(onKey);
 }
@@ -138,6 +145,8 @@ function paintSummary() {
       <div class="actions">
         <button class="btn btn-primary" data-action="exitSession">${esc(t('done'))}</button>
         <button class="btn btn-secondary" data-action="studyMore">${esc(t('study_more'))}</button>
+        ${session.struggles.size ? `
+          <button class="btn btn-secondary" data-action="copyStruggles">${esc(t('copy_struggles'))}</button>` : ''}
       </div>
       <span class="note">${esc(t('study_more_note'))}</span>
     </div>`);
@@ -190,6 +199,17 @@ async function rate(rating) {
   session.answers += 1;
   session.counts[rating] += 1;
   session.seen.add(card.card_id);
+  if (rating <= 2) {
+    session.struggles.set(card.card_id, {
+      id: card.ext_id || null,
+      deck: (S.decks.find((d) => d.deck_id === card.deck_id) || {}).path || '',
+      front: card.front,
+      back: card.back,
+      hint: card.hint || '',
+      lapses: card.lapses,
+      rated: rating === 1 ? 'again' : 'hard',
+    });
+  }
   if (result.requeue && result.card) session.queue.push(result.card);
 
   nextCard();
@@ -212,6 +232,18 @@ export const actions = {
   },
 
   rate: (el) => rate(Number(el.dataset.rating)),
+
+  copyStruggles: () => {
+    const session = S.session;
+    if (!session || !session.struggles.size) return;
+    const cards = [...session.struggles.values()];
+    copyForAI(t('ai_struggles_intro', { n: cards.length }), {
+      kc_export: 1,
+      kind: 'struggles',
+      deck: S.deck || '',
+      cards,
+    });
+  },
 
   exitSession: () => {
     S.session = null;
@@ -237,6 +269,7 @@ export const actions = {
     session.revealed = false;
     session.hintShown = false;
     session.answers = Math.max(0, session.answers - 1);
+    session.struggles.delete(result.card.card_id);
     showToast(t('undone'), 1400);
     paint();
   },

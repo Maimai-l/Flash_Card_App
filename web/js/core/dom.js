@@ -105,10 +105,51 @@ export function typingInInput(event) {
 
 export function bindKeyboard() {
   window.addEventListener('keydown', (event) => {
-    if (!keyHandler) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === '?' && !typingInInput(event) && !modalIsOpen()) {
+      event.preventDefault();
+      return showShortcuts();
+    }
+    if (!keyHandler) return;
     keyHandler(event);
   });
+}
+
+/* Every shortcut in one place, on the one key everyone tries. */
+function showShortcuts() {
+  const row = (keys, label) => `
+    <div class="shortcut-row">
+      <span class="keys">${keys.map((k) => `<span class="kbd">${esc(k)}</span>`).join('')}</span>
+      <span>${esc(label)}</span>
+    </div>`;
+  const section = (label, rows) => `
+    <div class="shortcut-section">
+      <div class="section-label" style="margin-bottom:6px">${esc(label)}</div>
+      ${rows.join('')}
+    </div>`;
+  showModal(`
+    <h2>${esc(t('shortcuts'))}</h2>
+    <div class="shortcut-grid">
+      ${section(t('sc_review'), [
+        row(['Space'], t('show_answer')),
+        row(['1', '2', '3', '4'], t('sc_rate')),
+        row(['E'], t('edit_card')),
+        row(['Z'], t('undo')),
+        row(['H'], t('hint')),
+      ])}
+      ${section(t('sc_browsing'), [
+        row(['Space'], t('sc_flip')),
+        row(['\u2190', '\u2192'], `${t('prev')} / ${t('next')}`),
+      ])}
+      ${section(t('sc_quiz'), [
+        row(['1', '\u2026', '9'], t('sc_pick')),
+        row(['Enter'], t('sc_check_advance')),
+      ])}
+      ${section(t('sc_anywhere'), [
+        row(['Esc'], t('sc_leave')),
+        row(['?'], t('sc_help')),
+      ])}
+    </div>`);
 }
 
 /* ── Toast ──────────────────────────────────────────────────────────────── */
@@ -147,22 +188,39 @@ export function hideTip() {
 /* ── Modal ──────────────────────────────────────────────────────────────── */
 
 let modalCleanup = null;
+let modalReturnFocus = null;
 
 export function showModal(innerHtml, { wide = false, onMount } = {}) {
   const overlay = document.getElementById('overlay');
+  modalReturnFocus = document.activeElement;
   overlay.innerHTML = `<div class="modal${wide ? ' wide' : ''}">${innerHtml}</div>`;
   overlay.hidden = false;
   const escClose = (event) => { if (event.key === 'Escape') closeModal(); };
   document.addEventListener('keydown', escClose);
   modalCleanup = () => document.removeEventListener('keydown', escClose);
   if (onMount) onMount(overlay.firstElementChild);
+  // Keyboard users land inside the dialog, not on whatever was behind it.
+  if (!overlay.contains(document.activeElement)) {
+    const target = overlay.querySelector('input, textarea, select, button');
+    if (target) target.focus();
+  }
 }
 
 export function closeModal() {
   const overlay = document.getElementById('overlay');
+  const wasOpen = !overlay.hidden;
   overlay.hidden = true;
   overlay.innerHTML = '';
   if (modalCleanup) { modalCleanup(); modalCleanup = null; }
+  // ...and are put back where they were when the dialog closes.
+  if (wasOpen && modalReturnFocus && document.contains(modalReturnFocus)) {
+    modalReturnFocus.focus();
+  }
+  modalReturnFocus = null;
+}
+
+export function modalIsOpen() {
+  return !document.getElementById('overlay').hidden;
 }
 
 export function confirmDialog({ title, body = '', confirmLabel, danger = false }) {
