@@ -158,8 +158,10 @@ One SQLite file, plus a log:
 `KC_USER_DATA=/some/path` points the app somewhere else, which is how the tests
 run against a throwaway directory.
 
-Export from the Cards page for a portable backup; copy `knowledge.db` for a
-complete one.
+*Export cards* on the Cards page downloads the selected deck as a JSON file,
+and Settings has *Export all cards* for the whole library in one file; both are
+in exactly the format Import accepts back. Copy `knowledge.db` for a complete
+backup including schedules and history.
 
 ## Development
 

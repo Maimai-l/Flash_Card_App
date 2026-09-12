@@ -171,9 +171,11 @@ Remember that JSON needs its backslashes doubled: `$Av = \\lambda v$`.
 
 ## Export
 
-*Cards → Export cards* copies the current deck back out in exactly the format
-above, and each quiz can be exported from its `⋯` menu. Both round-trip: paste
-what you exported and you get the same content back.
+*Cards → Export cards* downloads the current deck as a JSON file in exactly the
+format above; *Settings → Export all cards* does the same for every deck at
+once, and each quiz exports from its menu. All of them round-trip: import the
+file you exported and every card updates in place, byte for byte, which
+`tests/test_export.py` holds them to.
 
 ---
 

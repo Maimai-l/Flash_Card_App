@@ -32,6 +32,28 @@ export function shuffle(list) {
   return out;
 }
 
+/* Hand the browser a real file. Clipboard was the old road for exports, and a
+   few thousand lines of JSON on the clipboard is exactly the thing that gets
+   half-pasted or silently truncated by a clipboard manager. */
+export function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** A path or name as a filename: lower case, hyphens, nothing exotic. */
+export function fileSlug(text) {
+  return String(text || '').toLowerCase()
+    .replace(/::/g, '-').replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'all';
+}
+
 export function loading() {
   $content().innerHTML = '<div class="spinner"></div>';
 }

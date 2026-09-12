@@ -9,6 +9,7 @@
  *   node tests/e2e/interaction.mjs
  */
 
+import fs from 'fs';
 import { chromium } from 'playwright';
 import { matchesAny } from '../../web/js/questions/util.js';
 
@@ -86,7 +87,13 @@ const browser = await chromium.launch({
 const page = await browser.newPage({
   viewport: { width: 1280, height: 860 },
   permissions: ['clipboard-read', 'clipboard-write'],
+  acceptDownloads: true,
 });
+const catchDownload = async (action) => {
+  const [download] = await Promise.all([page.waitForEvent('download'), action()]);
+  const body = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+  return { name: download.suggestedFilename(), body };
+};
 const readClipboard = () => page.evaluate(() => navigator.clipboard.readText());
 page.setDefaultTimeout(8000);
 
@@ -111,6 +118,9 @@ check('the state breakdown actually paints its bars',
 check('Study and Browse sit inside the first card',
   await page.locator('.hero-card [data-action="startSession"]').count() === 1
   && await page.locator('.hero-card [data-action="startBrowse"]').count() === 1);
+check('subject cards carry their pixel initials',
+  await page.locator('.subject-card .pixel-glyph svg').count()
+    === await page.locator('.subject-card').count());
 
 // ── Review ────────────────────────────────────────────────────────────────
 await page.click('.deck-item:has-text("Linear Algebra")');
@@ -341,6 +351,17 @@ await page.waitForTimeout(600);
 check('a new card appears in the table',
   await page.locator('.card-row').count() === rows + 1);
 
+// Export is a file, not a clipboard gamble, and it must pair every front with
+// its own back and deck.
+const deckExport = await catchDownload(() => page.click('button:has-text("Export cards")'));
+check('export downloads a named JSON file',
+  /^knowledge-cards-[a-z0-9-]+\.json$/.test(deckExport.name));
+check('the deck export holds exactly the cards on screen',
+  deckExport.body.cards.length === rows + 1
+  && deckExport.body.cards.every((c) => c.front && c.back && c.deck.startsWith('Mathematics')));
+check('the card added a moment ago exports with its own back',
+  deckExport.body.cards.some((c) => c.front === 'Added from the UI' && c.back === 'It saved'));
+
 // ── Import ────────────────────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Import")');
 await page.waitForSelector('#import-text');
@@ -386,6 +407,13 @@ check('the document declares the language it is showing',
   await page.evaluate(() => document.documentElement.dataset.lang) === 'zh');
 await page.click('[data-action="setLanguage"][data-lang="en"]');
 await page.waitForTimeout(600);
+
+const allExport = await catchDownload(() => page.click('[data-action="exportAllCards"]'));
+const arp = allExport.body.cards.find((c) => c.front === 'What does ARP resolve?');
+check('Settings exports every deck to one file',
+  allExport.name === 'knowledge-cards-all.json'
+  && arp && arp.back === 'IP to MAC on the local link.'
+  && arp.deck === 'Computer Science::Networks');
 
 // ── Browse leaves the schedule alone ──────────────────────────────────────
 await page.click('.nav-link:has-text("Home")');

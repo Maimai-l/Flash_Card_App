@@ -2,7 +2,8 @@
 
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
-import { $content, esc, attr, showToast, showModal, closeModal, confirmDialog } from '../core/dom.js';
+import { $content, esc, attr, showToast, showModal, closeModal, confirmDialog,
+         downloadJson, fileSlug } from '../core/dom.js';
 import { plain } from '../core/render.js';
 import { t } from '../core/i18n.js';
 import { render } from '../core/router.js';
@@ -325,16 +326,8 @@ export const actions = {
   exportDeck: async () => {
     const payload = await api.export_cards(S.deck);
     if (payload.error) return showToast(payload.error, 3200);
-    const text = JSON.stringify(payload, null, 2);
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(t('export_copied'));
-    } catch (err) {
-      showModal(`<h2>${esc(t('export_title'))}</h2>
-        <textarea class="textarea code" style="min-height:340px">${esc(text)}</textarea>
-        <div class="modal-actions">
-          <button class="btn btn-secondary btn-sm" data-action="closeModal">${esc(t('close'))}</button>
-        </div>`, { wide: true });
-    }
+    const name = `knowledge-cards-${fileSlug(S.deck || 'all')}.json`;
+    downloadJson(name, payload);
+    showToast(t('export_saved', { name }), 2600);
   },
 };

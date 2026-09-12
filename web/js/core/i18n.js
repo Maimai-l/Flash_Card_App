@@ -72,7 +72,9 @@ const en = {
   import_done: 'Imported {new} new, {updated} updated',
   import_empty: 'Paste some JSON first.',
   will_create: 'create', will_replace: 'replace', will_keep: 'unchanged',
-  export_title: 'Export', export_cards: 'Export cards', export_copied: 'Copied to clipboard',
+  export_title: 'Export', export_cards: 'Export cards',
+  export_saved: 'Saved as {name}',
+  export_all: 'Export all cards', export_all_desc: 'Every card in every deck, as one JSON file the Import page accepts back.',
   download: 'Download',
 
   stats_title: 'Stats', total_cards: 'Total cards', state_new: 'New',
@@ -183,7 +185,9 @@ const zh = {
   import_done: '已导入 {new} 张新卡，更新 {updated} 张',
   import_empty: '先粘贴 JSON。',
   will_create: '新建', will_replace: '替换', will_keep: '未改动',
-  export_title: '导出', export_cards: '导出卡片', export_copied: '已复制到剪贴板',
+  export_title: '导出', export_cards: '导出卡片',
+  export_saved: '已保存为 {name}',
+  export_all: '导出全部卡片', export_all_desc: '所有卡组的全部卡片，存成一个 JSON 文件，导入页可以原样收回。',
   download: '下载',
 
   stats_title: '统计', total_cards: '卡片总数', state_new: '新卡',

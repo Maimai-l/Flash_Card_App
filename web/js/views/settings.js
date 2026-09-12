@@ -2,7 +2,7 @@
 
 import { S, savePrefs } from '../core/state.js';
 import { api } from '../core/api.js';
-import { $content, esc, attr, showToast, confirmDialog } from '../core/dom.js';
+import { $content, esc, attr, showToast, confirmDialog, downloadJson } from '../core/dom.js';
 import { t, LANGUAGES } from '../core/i18n.js';
 import { render } from '../core/router.js';
 import { railHead } from './sidebar.js';
@@ -92,6 +92,8 @@ export async function renderSettings() {
 
         <div class="card settings-section" id="section-data">
           <div class="card-title">${esc(t('data'))}</div>
+          <div><button class="btn btn-secondary" data-action="exportAllCards">${esc(t('export_all'))}</button></div>
+          <div class="setting-note">${esc(t('export_all_desc'))}</div>
           <div><button class="btn btn-danger" data-action="resetAll">${esc(t('reset_all'))}</button></div>
           <div class="setting-note">${esc(t('reset_desc'))}</div>
           <div class="version-line">${esc(t('version'))} ${esc(S.version)}</div>
@@ -101,6 +103,14 @@ export async function renderSettings() {
 }
 
 export const actions = {
+  exportAllCards: async () => {
+    const payload = await api.export_cards('');
+    if (payload.error) return showToast(payload.error, 3200);
+    const name = 'knowledge-cards-all.json';
+    downloadJson(name, payload);
+    showToast(t('export_saved', { name }), 2600);
+  },
+
   scrollToSection: (el) => {
     const target = document.getElementById(`section-${el.dataset.section}`);
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });

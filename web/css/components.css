@@ -118,6 +118,10 @@ kbd, .kbd {
   align-items: baseline;
   gap: 12px;
 }
+/* The blocky initial beside a subject title, drawn by core/pixel.js. It sits
+   on the title's optical centre, not its baseline, and never shrinks. */
+.card-title .pixel-glyph { align-self: center; display: inline-flex; flex-shrink: 0; color: var(--ink); }
+.card-title .pixel-glyph:empty { display: none; }
 .card-title .meta {
   font-size: 12px;
   font-weight: 600;

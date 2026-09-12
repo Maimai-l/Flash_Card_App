@@ -7,7 +7,8 @@
 
 import { S } from '../core/state.js';
 import { api } from '../core/api.js';
-import { $content, esc, attr, showToast, showModal, closeModal, confirmDialog, promptDialog } from '../core/dom.js';
+import { $content, esc, attr, showToast, showModal, closeModal, confirmDialog, promptDialog,
+         downloadJson, fileSlug } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { navigate, render } from '../core/router.js';
 import { renderSidebar, railHead } from './sidebar.js';
@@ -185,16 +186,8 @@ export const actions = {
     closeModal();
     const payload = await api.export_quiz(groupId);
     if (payload.error) return showToast(payload.error, 3200);
-    const text = JSON.stringify(payload, null, 2);
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(t('export_copied'));
-    } catch (err) {
-      showModal(`<h2>${esc(t('export_title'))}</h2>
-        <textarea class="textarea code" style="min-height:320px">${esc(text)}</textarea>
-        <div class="modal-actions">
-          <button class="btn btn-secondary btn-sm" data-action="closeModal">${esc(t('close'))}</button>
-        </div>`, { wide: true });
-    }
+    const name = `quiz-${fileSlug(payload.quiz && payload.quiz.name)}.json`;
+    downloadJson(name, payload);
+    showToast(t('export_saved', { name }), 2600);
   },
 };
