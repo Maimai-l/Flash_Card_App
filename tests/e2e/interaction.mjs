@@ -118,10 +118,12 @@ check('the state breakdown actually paints its bars',
 check('Study and Browse sit inside the first card',
   await page.locator('.hero-card [data-action="startSession"]').count() === 1
   && await page.locator('.hero-card [data-action="startBrowse"]').count() === 1);
-check('subject cards carry their pixel initials',
-  (await page.locator('.subject-card .pixel-mark').allTextContents())
-    .every((mark) => /^[A-Z0-9]$/.test(mark))
-  && await page.locator('.subject-card .pixel-mark').count()
+// The reference capability card, copied: a pixel letter at the head and the
+// same row upside down at the foot, one of each per card.
+check('subject cards carry their pixel letters, head and mirrored foot',
+  await page.locator('.subject-card .cap-letter').count()
+    === 2 * await page.locator('.subject-card').count()
+  && await page.locator('.subject-card .cap-foot').count()
     === await page.locator('.subject-card').count());
 check('the pixel face really loaded',
   await page.evaluate(() => document.fonts.check('12px Pixel')));

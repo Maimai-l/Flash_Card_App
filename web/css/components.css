@@ -118,24 +118,6 @@ kbd, .kbd {
   align-items: baseline;
   gap: 12px;
 }
-/* The blocky initial beside a subject title. Real type, not an icon: it sits
-   on the same baseline as the title, in the pixel face made for exactly this. */
-.pixel-mark {
-  font-family: 'Pixel', var(--font-ui);
-  position: relative;
-  left: .15em;
-  font-size: 3em;
-  margin: 0;
-  /* The face's ink fills 0.6 of its em, sits on the baseline and has no
-     descender, so a line box that size hugs the glyph exactly; centring that
-     box on the row is what lines the glyph up with the title's caps. The
-     shrunken line box also confuses flex baseline alignment, which is the
-     other reason not to use it here. */
-  line-height: .62;
-  align-self: center;
-  flex-shrink: 0;
-}
-.pixel-mark:empty { display: none; }
 .card-title .meta {
   font-size: 12px;
   font-weight: 600;

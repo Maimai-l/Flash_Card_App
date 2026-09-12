@@ -71,17 +71,12 @@
   justify-content: center;
 }
 .hero-figures { display: flex; align-items: baseline; gap: 20px; }
-/* The display numbers are set in the pixel face: it is monospaced, so counts
-   never jitter, and it is the letterform the whole design is quoting. Its ink
-   fills 0.6 of the em with no descender, hence the tight line-height and the
-   larger nominal sizes. Weight 400 because the face has exactly one cut and a
-   synthesised bold would smear the pixels. */
 .hero-value {
-  font-family: 'Pixel', var(--font-ui);
-  font-weight: 400;
-  font-size: 120px;
-  letter-spacing: .02em;
-  line-height: .62;
+  font-size: 88px;
+  font-weight: 700;
+  letter-spacing: -.035em;
+  line-height: .92;
+  font-variant-numeric: tabular-nums;
   color: var(--blue);
 }
 .hero-value.zero { color: var(--grey-4); }
@@ -91,8 +86,38 @@
 .hero-done { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
 .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 30px; }
 
-.subject-card { padding: 24px 26px 20px; display: flex; flex-direction: column; }
-.subject-card .card-title { margin-bottom: 14px; }
+/* The subject card copies the reference capability card: title row with the
+   pixel letter at the far right, the same row repeated upside down at the
+   bottom like a playing card, and a rule of literal periods between entries.
+   The decoration's own numbers are the reference's (1.5em / 3em / .15em /
+   period rules at 1.5em, blue at 20%), resolved against this card's em. */
+.subject-card { padding: 1.9em 2em 1.6em; display: flex; flex-direction: column; font-size: 13px; }
+.cap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cap-head .cap-name {
+  font-size: 1.5em;
+  font-weight: 700;
+  letter-spacing: .005em;
+  text-transform: uppercase;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cap-head .cap-letter {
+  position: relative;
+  left: .15em;
+  font-size: 3em;
+  font-family: 'Pixel', var(--font-ui);
+  font-weight: 400;
+  line-height: 1;
+  margin: 0;
+  flex-shrink: 0;
+}
+.cap-head .cap-letter:empty { display: none; }
+.cap-head.cap-foot { transform: rotate(180deg); margin-top: auto; padding-top: 1.4em; }
+.subject-card .chapter-rows { margin: .9em 0 .5em; }
 .chapter-row {
   display: flex;
   align-items: center;
@@ -105,6 +130,19 @@
   font-weight: 500;
 }
 .chapter-row:last-child { border-bottom: none; }
+.subject-card .chapter-row { border-bottom: none; position: relative; }
+.subject-card .chapter-row:not(:last-child)::after {
+  content: "................................................................";
+  position: absolute;
+  left: 4px; right: 4px; bottom: -.5em;
+  font-size: 1.5em;
+  line-height: 1;
+  letter-spacing: .125em;
+  color: rgb(43 50 240 / .2);
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .chapter-row:hover { background: var(--hover); }
 .chapter-row .chapter-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chapter-row .chapter-total {
@@ -523,12 +561,12 @@
   margin: auto;
 }
 .result-score {
-  font-family: 'Pixel', var(--font-ui);
-  font-weight: 400;
-  font-size: 74px;
-  letter-spacing: .02em;
-  line-height: .62;
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+  line-height: 1;
   color: var(--blue);
+  font-variant-numeric: tabular-nums;
 }
 .result-sub { font-size: 13.5px; font-weight: 600; color: var(--grey-2); margin-top: 6px; }
 .result-list { margin-top: 20px; }
@@ -681,9 +719,6 @@
 .stat-head .stat-name {
   flex: 1; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: .005em;
 }
-/* Not the pixel face here: 6, 7, 8 and 9 in it are abstract shapes, fine in a
-   display moment you can count against context, unreadable as data. Stats is
-   the page you come to for exact numbers. */
 .stat-head .stat-value {
   font-size: 32px; font-weight: 700; letter-spacing: -.025em;
   font-variant-numeric: tabular-nums; color: var(--blue);

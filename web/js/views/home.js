@@ -97,13 +97,16 @@ function subjectCardsHtml() {
         </div>`;
     }).join('');
 
+    const head = `
+      <div class="cap-head">
+        <span class="cap-name">${esc(subject.name)}</span>
+        <span class="cap-letter">${esc(initial.toLowerCase())}</span>
+      </div>`;
     return `
       <div class="card subject-card">
-        <div class="card-title">${esc(subject.name)}
-          <span class="pixel-mark">${esc(initial)}</span>
-          <span class="meta">${subject.total} ${
-            esc(t(subject.total === 1 ? 'card' : 'cards'))}</span></div>
-        ${rows}
+        ${head}
+        <div class="chapter-rows">${rows}</div>
+        ${head.replace('cap-head', 'cap-head cap-foot')}
       </div>`;
   }).join('');
 
