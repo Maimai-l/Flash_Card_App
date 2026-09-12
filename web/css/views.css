@@ -51,7 +51,9 @@
 .subject-grid {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  /* Wide enough that the longest subject name shares its row with the pixel
+     mark and the count without wrapping. */
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   gap: 18px;
 }
 @media (max-width: 1120px) {
@@ -69,12 +71,17 @@
   justify-content: center;
 }
 .hero-figures { display: flex; align-items: baseline; gap: 20px; }
+/* The display numbers are set in the pixel face: it is monospaced, so counts
+   never jitter, and it is the letterform the whole design is quoting. Its ink
+   fills 0.6 of the em with no descender, hence the tight line-height and the
+   larger nominal sizes. Weight 400 because the face has exactly one cut and a
+   synthesised bold would smear the pixels. */
 .hero-value {
-  font-size: 88px;
-  font-weight: 700;
-  letter-spacing: -.035em;
-  line-height: .92;
-  font-variant-numeric: tabular-nums;
+  font-family: 'Pixel', var(--font-ui);
+  font-weight: 400;
+  font-size: 120px;
+  letter-spacing: .02em;
+  line-height: .62;
   color: var(--blue);
 }
 .hero-value.zero { color: var(--grey-4); }
@@ -516,12 +523,12 @@
   margin: auto;
 }
 .result-score {
-  font-size: 52px;
-  font-weight: 700;
-  letter-spacing: -.025em;
-  line-height: 1;
+  font-family: 'Pixel', var(--font-ui);
+  font-weight: 400;
+  font-size: 74px;
+  letter-spacing: .02em;
+  line-height: .62;
   color: var(--blue);
-  font-variant-numeric: tabular-nums;
 }
 .result-sub { font-size: 13.5px; font-weight: 600; color: var(--grey-2); margin-top: 6px; }
 .result-list { margin-top: 20px; }
@@ -674,6 +681,9 @@
 .stat-head .stat-name {
   flex: 1; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: .005em;
 }
+/* Not the pixel face here: 6, 7, 8 and 9 in it are abstract shapes, fine in a
+   display moment you can count against context, unreadable as data. Stats is
+   the page you come to for exact numbers. */
 .stat-head .stat-value {
   font-size: 32px; font-weight: 700; letter-spacing: -.025em;
   font-variant-numeric: tabular-nums; color: var(--blue);

@@ -9,7 +9,6 @@ import { api } from '../core/api.js';
 import { $content, esc, attr } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { navigate } from '../core/router.js';
-import { pixelInitial } from '../core/pixel.js';
 
 const WEEK_ROWS = 7;
 
@@ -84,6 +83,7 @@ function subjectCardsHtml() {
   if (!subjects.length) return '';
 
   const cards = subjects.map((subject) => {
+    const initial = (String(subject.name).match(/[A-Za-z0-9]/) || [''])[0].toUpperCase();
     const children = S.decks.filter((deck) =>
       deck.depth === 1 && deck.path.startsWith(subject.path + '::'));
     const rows = (children.length ? children : [subject]).map((deck) => {
@@ -100,7 +100,7 @@ function subjectCardsHtml() {
     return `
       <div class="card subject-card">
         <div class="card-title">${esc(subject.name)}
-          <span class="pixel-glyph">${pixelInitial(subject.name)}</span>
+          <span class="pixel-mark">${esc(initial)}</span>
           <span class="meta">${subject.total} ${
             esc(t(subject.total === 1 ? 'card' : 'cards'))}</span></div>
         ${rows}

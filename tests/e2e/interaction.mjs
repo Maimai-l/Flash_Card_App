@@ -119,8 +119,12 @@ check('Study and Browse sit inside the first card',
   await page.locator('.hero-card [data-action="startSession"]').count() === 1
   && await page.locator('.hero-card [data-action="startBrowse"]').count() === 1);
 check('subject cards carry their pixel initials',
-  await page.locator('.subject-card .pixel-glyph svg').count()
+  (await page.locator('.subject-card .pixel-mark').allTextContents())
+    .every((mark) => /^[A-Z0-9]$/.test(mark))
+  && await page.locator('.subject-card .pixel-mark').count()
     === await page.locator('.subject-card').count());
+check('the pixel face really loaded',
+  await page.evaluate(() => document.fonts.check('12px Pixel')));
 
 // ── Review ────────────────────────────────────────────────────────────────
 await page.click('.deck-item:has-text("Linear Algebra")');

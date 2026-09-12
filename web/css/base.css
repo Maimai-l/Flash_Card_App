@@ -22,6 +22,16 @@
     U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* The pixel display face for subject marks: Lusion Mono, supplied as a file.
+   Its glyphs sit on the baseline and fill only ~0.6em, which is why the mark
+   is set at 3em; block display, because a swapped-in text-face letter is worse
+   than a moment of nothing. */
+@font-face {
+  font-family: 'Pixel';
+  src: url('../vendor/fonts/Pixel.woff2') format('woff2');
+  font-display: block;
+}
+
 /* Chinese is not bundled — a CJK face is megabytes — but the system face still
    has to be chosen properly. PingFang, the macOS default, stops at Semibold, so
    asking it for 700 or 800 makes the browser smear the Regular cut into a fake
