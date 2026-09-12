@@ -637,16 +637,21 @@
   min-height: 30px;
 }
 
-/* ── Import ─────────────────────────────────────────────────────────────── */
-.import-grid {
+/* ── Import ─────────────────────────────────────────────────────────────────
+   One column: the input card, then the result of validating it, full width,
+   in reading order. Two side-by-side cards never agreed on a height. */
+#import-result { margin-top: 18px; }
+.import-expects {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 26px;
   align-items: start;
 }
-.import-main { display: flex; flex-direction: column; gap: 14px; }
-.import-side { position: sticky; top: 0; }
+@media (max-width: 900px) {
+  .import-expects { grid-template-columns: minmax(0, 1fr); }
+}
 .import-shape {
+  margin: 0;
   font-family: var(--font-num);
   font-size: 11.5px;
   line-height: 1.65;
@@ -662,7 +667,7 @@
 .import-deck-line .select { flex: 1; }
 .paste-box {
   width: 100%;
-  height: 320px;
+  height: 280px;
   resize: none;
   border: 1.5px dashed #C6C8DA;
   border-radius: 16px;
@@ -676,12 +681,14 @@
 }
 .paste-box:focus { border-color: var(--ink); border-style: solid; }
 .import-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
-@media (max-width: 1000px) {
-  .import-grid { grid-template-columns: minmax(0, 1fr); }
-  .import-side { position: static; }
-}
+.import-actions .grow { flex: 1; }
 
-.issue-list { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+/* The issue list scrolls rather than pushing the page: a 200-line paste with
+   40 bad entries still shows its figures and its Import button. */
+.issue-list {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 16px;
+  max-height: 260px; overflow-y: auto;
+}
 .issue {
   display: flex;
   gap: 10px;
@@ -698,6 +705,17 @@
 .issue .where {
   font-family: var(--font-num); font-size: 11.5px; flex-shrink: 0; opacity: .75;
 }
+/* Figures on the left, the decision on the right, on the first line of the
+   result: the Import button is never below a fold of issues. */
+.preview-head {
+  display: flex;
+  align-items: center;
+  gap: 20px 30px;
+  flex-wrap: wrap;
+}
+.preview-head .preview-figures { flex: 1; }
+.preview-commit { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
 .preview-figures { display: flex; gap: 30px; flex-wrap: wrap; }
 .preview-figure .value {
   font-size: 30px; font-weight: 700; letter-spacing: -.02em;
@@ -707,6 +725,24 @@
   font-size: 10.5px; font-weight: 700; letter-spacing: .1em;
   text-transform: uppercase; color: var(--grey-3); margin-top: 3px;
 }
+
+/* Where the cards would land: one dotted row per deck, not a run-on line. */
+.preview-decks { margin-top: 18px; }
+.preview-deck-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 2px;
+  border-bottom: 2px dotted var(--rule);
+  font-size: 13px;
+  font-weight: 600;
+}
+.preview-deck-row:last-child { border-bottom: none; }
+.preview-deck-row .preview-deck-name { flex: 1; min-width: 0; word-break: break-word; }
+.preview-deck-row .preview-deck-count {
+  font-variant-numeric: tabular-nums; font-weight: 700; color: var(--blue);
+}
+.preview-deck-row.more { color: var(--grey-3); font-weight: 600; }
 
 /* ── Stats ──────────────────────────────────────────────────────────────── */
 .stat-grid {

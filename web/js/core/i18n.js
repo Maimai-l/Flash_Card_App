@@ -63,8 +63,8 @@ const en = {
 
   import_title: 'Import', paste_json: 'Paste JSON',
   copy_decks: 'Copy deck names', decks_copied: '{n} deck names copied',
-  copy_decks_desc: 'Hand these to whatever writes the JSON so the "deck" field matches a deck you already have.',
   no_decks_to_copy: 'There are no decks yet.',
+  import_file: 'Choose a JSON file', more_decks: '+ {n} more decks',
   target_deck: 'Target deck', from_json: 'From the JSON',
   validate: 'Validate', import_now: 'Import',
   import_new: 'new', import_updated: 'updated', import_duplicates: 'already there',
@@ -176,7 +176,7 @@ const zh = {
 
   import_title: '导入', paste_json: '粘贴 JSON',
   copy_decks: '复制卡组名', decks_copied: '已复制 {n} 个卡组名',
-  copy_decks_desc: '把这些交给写 JSON 的一方，"deck" 字段就会落在已有的卡组上。',
+  import_file: '选择 JSON 文件', more_decks: '还有 {n} 个卡组',
   no_decks_to_copy: '还没有卡组。',
   target_deck: '目标卡组', from_json: '按 JSON 里写的',
   validate: '校验', import_now: '导入',

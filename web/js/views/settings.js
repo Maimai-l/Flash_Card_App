@@ -37,7 +37,7 @@ export async function renderSettings() {
         <h1>${esc(t('settings_title'))}</h1>
       </div>
 
-      <div class="narrow">
+      <div>
         <div class="card settings-section" id="section-language">
           <div class="card-title">${esc(t('language'))}</div>
           <div class="row gap8">

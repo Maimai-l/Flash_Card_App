@@ -160,7 +160,11 @@ class StudyService:
                         node[key] += other["_own"][key]
         for node in by_path.values():
             node.pop("_own")
-        return sorted(by_path.values(), key=lambda d: d["path"])
+        # Sorted by path *segments*, not by the raw string. In a raw sort,
+        # "Communication and Internet Technologies" lands between
+        # "Communication" and "Communication::..." (space < colon), splitting a
+        # deck from its own children whenever a sibling's name extends its name.
+        return sorted(by_path.values(), key=lambda d: d["path"].split("::"))
 
     # ── Queue ─────────────────────────────────────────────────────────────
 

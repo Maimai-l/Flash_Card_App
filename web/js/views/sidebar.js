@@ -64,6 +64,7 @@ function renderDeckTree(sidebar) {
     return `
       <div class="deck-item ${S.deck === deck.path ? 'active' : ''}"
            style="padding-left:${6 + deck.depth * 14}px"
+           title="${attr(deck.path)}"
            data-action="selectDeck" data-deck="${attr(deck.path)}">
         <span class="deck-twisty ${children ? (collapsed ? 'collapsed' : '') : 'leaf'}"
               ${children ? `data-action="toggleDeck" data-deck="${attr(deck.path)}"` : ''}>${CHEVRON}</span>

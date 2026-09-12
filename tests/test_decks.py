@@ -60,3 +60,24 @@ def test_limits_are_read_from_the_root(context):
     context.decks.ensure_path("Mathematics::Linear Algebra")
     context.decks.set_limits("Mathematics", 5, 25)
     assert context.decks.limits_for("Mathematics::Linear Algebra") == (5, 25)
+
+
+def test_a_subtree_stays_with_its_parent_when_a_sibling_extends_the_name(context):
+    """"Communication" and "Communication and Internet Technologies" are
+    siblings. A raw string sort puts the longer name between the shorter one
+    and its own children, because the space in "and" sorts before the colons
+    of "::". The tree must sort by segments so every subtree is contiguous."""
+    for path in [
+        "Computer Science::Communication::Hardware and Ethernet",
+        "Computer Science::Communication::Topologies",
+        "Computer Science::Communication and Internet Technologies::Packet Switching",
+    ]:
+        context.decks.ensure_path(path)
+
+    paths = [d["path"] for d in context.study.deck_tree()]
+    i = paths.index("Computer Science::Communication")
+    assert paths[i + 1] == "Computer Science::Communication::Hardware and Ethernet"
+    assert paths[i + 2] == "Computer Science::Communication::Topologies"
+    assert paths[i + 3] == "Computer Science::Communication and Internet Technologies"
+    assert paths[i + 4] == ("Computer Science::Communication and Internet "
+                            "Technologies::Packet Switching")

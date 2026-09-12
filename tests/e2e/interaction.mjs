@@ -10,6 +10,7 @@
  */
 
 import fs from 'fs';
+import os from 'os';
 import { chromium } from 'playwright';
 import { matchesAny } from '../../web/js/questions/util.js';
 
@@ -388,6 +389,31 @@ const decksAfterImport = (await call('get_decks')).map((deck) => deck.path);
 check('importing creates the new subject', decksAfterImport.includes('Exams::TMUA'));
 check('importing writes only the good card',
   (await call('get_overview', ['Exams'])).total_cards === 1);
+
+// A JSON file is the paste box without the paste: picking it fills the box
+// and validates on its own.
+const importFile = `${os.tmpdir()}/kc-e2e-import.json`;
+fs.writeFileSync(importFile, JSON.stringify({
+  deck: 'Exams::TMUA',
+  cards: [{ front: 'From a file', back: 'It landed in the box.' }],
+}));
+await page.setInputFiles('#import-file', importFile);
+await page.waitForSelector('.preview-figures');
+check('picking a JSON file fills the paste box',
+  (await page.inputValue('#import-text')).includes('From a file'));
+check('and runs the validation by itself',
+  (await page.locator('.preview-figure .value').first().textContent()).trim() === '1');
+check('the result sits below the input, not beside it',
+  await page.evaluate(() => {
+    const box = document.getElementById('import-text').getBoundingClientRect();
+    const result = document.getElementById('import-result').getBoundingClientRect();
+    return result.top >= box.bottom && Math.abs(result.width - box.width) < 60;
+  }));
+await page.click('[data-action="commitImport"]');
+await page.waitForTimeout(900);
+check('the file import commits like a paste',
+  (await call('get_overview', ['Exams'])).total_cards === 2);
+fs.unlinkSync(importFile);
 
 // ── Stats ─────────────────────────────────────────────────────────────────
 await page.click('.nav-link:has-text("Stats")');
